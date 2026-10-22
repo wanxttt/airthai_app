@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'core/routing/app_router.dart';
+import 'core/routing/route_names.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_text_styles.dart';
-import 'features/splash/presentation/screens/splash_screen.dart';
 
 class AirthAIApp extends StatelessWidget {
   const AirthAIApp({super.key});
@@ -12,6 +13,9 @@ class AirthAIApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'AirthAI',
+      navigatorKey: AppRouter.navigatorKey,
+      initialRoute: RouteNames.splash,
+      onGenerateRoute: AppRouter.onGenerateRoute,
 
       theme: ThemeData(
         useMaterial3: true,
@@ -23,7 +27,7 @@ class AirthAIApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
 
-        textTheme: TextTheme(
+        textTheme: const TextTheme(
           headlineLarge: AppTextStyles.headingLarge,
           headlineMedium: AppTextStyles.headingMedium,
           titleLarge: AppTextStyles.title,
@@ -69,8 +73,6 @@ class AirthAIApp extends StatelessWidget {
           ),
         ),
       ),
-
-      home: const SplashScreen(),
     );
   }
 }

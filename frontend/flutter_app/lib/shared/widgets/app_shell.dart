@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/security/session_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../features/auth/presentation/screens/login_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -56,6 +58,59 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.bar_chart_rounded,
     ),
   ];
+
+  Future<void> _handleLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Sign out',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: const Text(
+          'Are you sure you want to sign out of your AirthAI account?',
+          style: TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await SessionManager.instance.logout();
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+        (route) => false,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +261,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _buildTopBar() {
+    final user = SessionManager.instance.currentUser;
+    final initial = (user != null && user.fullName.isNotEmpty)
+        ? user.fullName[0].toUpperCase()
+        : 'A';
+
     return Container(
       height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -215,12 +275,13 @@ class _AppShellState extends State<AppShell> {
       ),
       child: Row(
         children: [
-          Text(
-            navigationItems[selectedIndex].label,
-            style: AppTextStyles.headingMedium,
+          Expanded(
+            child: Text(
+              navigationItems[selectedIndex].label,
+              style: AppTextStyles.headingMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-
-          const Spacer(),
 
           Container(
             width: 38,
@@ -238,19 +299,69 @@ class _AppShellState extends State<AppShell> {
 
           const SizedBox(width: 12),
 
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
+          PopupMenuButton<String>(
+            tooltip: 'Account menu',
+            offset: const Offset(0, 48),
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Center(
-              child: Text(
-                'A',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
+            onSelected: (value) {
+              if (value == 'logout') {
+                _handleLogout();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user?.fullName ?? 'User',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      user?.email ?? '',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout_rounded, size: 18, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text(
+                      'Sign out',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -270,6 +381,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _buildUserSection() {
+    final user = SessionManager.instance.currentUser;
+    final userName = user?.fullName ?? 'Admin User';
+    final userRole = user?.role ?? 'Administrator';
+    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'A';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
@@ -284,10 +400,10 @@ class _AppShellState extends State<AppShell> {
               color: AppColors.primaryLight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
-                'A',
-                style: TextStyle(
+                initial,
+                style: const TextStyle(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w700,
                 ),
@@ -297,22 +413,26 @@ class _AppShellState extends State<AppShell> {
 
           const SizedBox(width: 10),
 
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Admin User',
-                  style: TextStyle(
+                  userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  'Administrator',
-                  style: TextStyle(
+                  userRole,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,
                   ),
@@ -321,7 +441,15 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
 
-          const Icon(Icons.more_horiz_rounded, color: AppColors.textSecondary),
+          IconButton(
+            tooltip: 'Sign out',
+            icon: const Icon(
+              Icons.logout_rounded,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: _handleLogout,
+          ),
         ],
       ),
     );

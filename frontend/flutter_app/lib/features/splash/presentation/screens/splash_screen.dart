@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/security/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../onboarding/presentation/screens/onboarding_screen.dart';
+import '../../../../shared/widgets/app_shell.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,6 +19,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _controller;
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -44,25 +47,43 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Timer(
+    _timer = Timer(
       const Duration(seconds: 2),
-      _goToOnboarding,
+      _checkSessionAndNavigate,
     );
   }
 
-  void _goToOnboarding() {
+  Future<void> _checkSessionAndNavigate() async {
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const OnboardingScreen(),
-      ),
-    );
+    try {
+      await SessionManager.instance.initialize();
+    } catch (_) {
+      // In case of initialization error, default to onboarding/login
+    }
+
+    if (!mounted) return;
+
+    if (SessionManager.instance.isAuthenticated) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AppShell(),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const OnboardingScreen(),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }

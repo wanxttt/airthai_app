@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+
+# Environment configurations (Never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Test and coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+

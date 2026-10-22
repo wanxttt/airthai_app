@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/security/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/app_shell.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -21,6 +23,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptTerms = false;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -32,7 +36,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _register() {
+  Future<void> _register() async {
+    if (_isLoading) return;
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -48,13 +54,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Registration will be connected to the backend next.',
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await SessionManager.instance.register(
+        name: _nameController.text,
+        email: _emailController.text,
+        phone: _phoneController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.primary,
+            content: Text(
+              'Account created successfully! Welcome to AirthAI.',
+            ),
+          ),
+        );
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AppShell(),
+          ),
+          (route) => false,
+        );
+      } else {
+        setState(() {
+          _errorMessage = result.errorMessage;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(
+              result.errorMessage ?? 'Registration failed. Please try again.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'An unexpected error occurred during registration.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text(_errorMessage!),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _goToLogin() {
@@ -83,7 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     // Back button
                     IconButton(
-                      onPressed: _goToLogin,
+                      onPressed: _isLoading ? null : _goToLogin,
                       padding: EdgeInsets.zero,
                       icon: const Icon(
                         Icons.arrow_back_rounded,
@@ -138,7 +200,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 32),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline_rounded,
+                              size: 18,
+                              color: Colors.red.shade700,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.red.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 28),
 
                     // Full name
                     _buildLabel('Full name'),
@@ -148,6 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _nameController,
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
+                      enabled: !_isLoading,
                       decoration: const InputDecoration(
                         hintText: 'Enter your full name',
                         prefixIcon: Icon(
@@ -177,6 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
+                      enabled: !_isLoading,
                       decoration: const InputDecoration(
                         hintText: 'Enter your email',
                         prefixIcon: Icon(
@@ -188,8 +283,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           return 'Please enter your email';
                         }
 
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
+                        final emailRegex = RegExp(
+                          r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                        );
+                        if (!emailRegex.hasMatch(value.trim())) {
+                          return 'Please enter a valid email address';
                         }
 
                         return null;
@@ -206,6 +304,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.next,
+                      enabled: !_isLoading,
                       maxLength: 10,
                       decoration: const InputDecoration(
                         hintText: 'Enter your phone number',
@@ -219,7 +318,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           return 'Please enter your phone number';
                         }
 
-                        if (value.length != 10) {
+                        if (value.trim().length != 10 ||
+                            !RegExp(r'^[0-9]+$').hasMatch(value.trim())) {
                           return 'Enter a valid 10-digit number';
                         }
 
@@ -237,6 +337,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.next,
+                      enabled: !_isLoading,
                       decoration: InputDecoration(
                         hintText: 'Create a password',
                         prefixIcon: const Icon(
@@ -278,6 +379,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _confirmPasswordController,
                       obscureText: _obscureConfirmPassword,
                       textInputAction: TextInputAction.done,
+                      enabled: !_isLoading,
                       onFieldSubmitted: (_) => _register(),
                       decoration: InputDecoration(
                         hintText: 'Confirm your password',
@@ -288,7 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onPressed: () {
                             setState(() {
                               _obscureConfirmPassword =
-                              !_obscureConfirmPassword;
+                                  !_obscureConfirmPassword;
                             });
                           },
                           icon: Icon(
@@ -323,11 +425,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: Checkbox(
                             value: _acceptTerms,
                             activeColor: AppColors.primary,
-                            onChanged: (value) {
-                              setState(() {
-                                _acceptTerms = value ?? false;
-                              });
-                            },
+                            onChanged: _isLoading
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _acceptTerms = value ?? false;
+                                    });
+                                  },
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -375,42 +479,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _register,
-                        child: const Text(
-                          'Create account',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        onPressed: _isLoading ? null : _register,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Create account',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                     ),
 
                     const SizedBox(height: 24),
 
                     // Login
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'Already have an account?',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: _goToLogin,
-                          child: const Text(
-                            'Sign in',
+                    Center(
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          const Text(
+                            'Already have an account?',
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
+                              color: AppColors.textSecondary,
                             ),
                           ),
-                        ),
-                      ],
+                          TextButton(
+                            onPressed: _isLoading ? null : _goToLogin,
+                            child: const Text(
+                              'Sign in',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

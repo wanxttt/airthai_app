@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { seedRoles } from './roles.seed';
 
 // Optional import when @prisma/client is installed in environment
