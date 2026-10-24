@@ -141,7 +141,9 @@ class SessionManager extends ChangeNotifier {
     );
   }
 
-  AuthMode _authMode = AuthMode.devMock;
+  AuthMode _authMode = const String.fromEnvironment('AUTH_MODE') == 'backend'
+      ? AuthMode.restBackend
+      : AuthMode.devMock;
   AuthSession? _currentSession;
   String? _rememberMeEmail;
   bool _isRememberMeEnabled = false;
@@ -219,6 +221,7 @@ class SessionManager extends ChangeNotifier {
     final hasToken = await _tokenManager.hasValidAccessToken();
     if (hasToken) {
       final token = await _tokenManager.getAccessToken();
+      final refreshToken = await _tokenManager.getRefreshToken();
       final userId = await _storage.read(key: StorageKeys.currentUserId);
       final userEmail = await _storage.read(key: StorageKeys.currentUserEmail);
       final userName = await _storage.read(key: StorageKeys.currentUserName);
@@ -237,6 +240,7 @@ class SessionManager extends ChangeNotifier {
 
         _currentSession = AuthSession(
           token: token,
+          refreshToken: refreshToken,
           user: user,
           expiresAt: DateTime.now().add(const Duration(days: 7)),
         );
@@ -359,6 +363,7 @@ class SessionManager extends ChangeNotifier {
     required String email,
     required String phone,
     required String password,
+    String? businessName,
   }) async {
     final cleanName = name.trim();
     final cleanEmail = email.trim().toLowerCase();
@@ -379,25 +384,32 @@ class SessionManager extends ChangeNotifier {
     }
 
     if (_authMode == AuthMode.restBackend) {
+      final payload = <String, dynamic>{
+        'fullName': cleanName,
+        'email': cleanEmail,
+        'phone': cleanPhone,
+        'password': cleanPassword,
+      };
+      if (businessName != null && businessName.trim().isNotEmpty) {
+        payload['businessName'] = businessName.trim();
+      }
+
       final response = await _apiClient.post(
         ApiConstants.authRegister,
-        body: {
-          'fullName': cleanName,
-          'email': cleanEmail,
-          'phone': cleanPhone,
-          'password': cleanPassword,
-        },
+        body: payload,
       );
 
       if (response.isSuccess && response.data != null) {
         final data = response.data!;
         final token = data['token'] as String? ?? data['accessToken'] as String?;
+        final refreshToken = data['refreshToken'] as String?;
         final userData = data['user'] as Map<String, dynamic>?;
 
         if (token != null && userData != null) {
           final user = AuthUser.fromMap(userData);
           final session = AuthSession(
             token: token,
+            refreshToken: refreshToken,
             user: user,
             expiresAt: DateTime.now().add(const Duration(hours: 24)),
           );
@@ -462,6 +474,151 @@ class SessionManager extends ChangeNotifier {
       return AuthResult.success(
         user: newUser,
         session: session,
+        isDevMock: true,
+      );
+    }
+  }
+
+  /// Performs token refresh with the backend using the stored refresh token.
+  /// Rotates tokens on success or logs out safely if token is expired/revoked.
+  Future<bool> refreshSession() async {
+    if (_authMode != AuthMode.restBackend) {
+      return true;
+    }
+
+    final currentRefreshToken = _currentSession?.refreshToken ??
+        await _tokenManager.getRefreshToken();
+
+    if (currentRefreshToken == null || currentRefreshToken.isEmpty) {
+      return false;
+    }
+
+    final response = await _apiClient.post(
+      ApiConstants.authRefresh,
+      body: {'refreshToken': currentRefreshToken},
+    );
+
+    if (response.isSuccess && response.data != null) {
+      final data = response.data!;
+      final newAccessToken =
+          data['accessToken'] as String? ?? data['token'] as String?;
+      final newRefreshToken = data['refreshToken'] as String?;
+      final expiresIn = data['expiresIn'] as int? ?? 3600;
+
+      if (newAccessToken != null && _currentSession != null) {
+        final updatedSession = AuthSession(
+          token: newAccessToken,
+          refreshToken: newRefreshToken ?? currentRefreshToken,
+          user: _currentSession!.user,
+          expiresAt: DateTime.now().add(Duration(seconds: expiresIn)),
+        );
+
+        _currentSession = updatedSession;
+        await _tokenManager.saveTokens(
+          accessToken: updatedSession.token,
+          refreshToken: updatedSession.refreshToken,
+          expiry: updatedSession.expiresAt,
+        );
+        notifyListeners();
+        return true;
+      }
+    }
+
+    // Refresh failed or revoked: clear invalid session
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await logout();
+    }
+    return false;
+  }
+
+  /// Updates business profile, legal info, and tax/GST settings.
+  Future<AuthResult> updateBusinessSetup({
+    required String businessName,
+    String? legalName,
+    String? gstin,
+    String? pan,
+    String? addressLine1,
+    String? city,
+    String? state,
+    String? stateCode,
+    String? pincode,
+    String? taxType,
+    String? defaultBillFormat,
+  }) async {
+    if (businessName.trim().isEmpty) {
+      return AuthResult.failure('Business name cannot be empty.');
+    }
+
+    if (_authMode == AuthMode.restBackend) {
+      final payload = <String, dynamic>{
+        'businessName': businessName.trim(),
+        if (legalName != null && legalName.trim().isNotEmpty)
+          'legalName': legalName.trim(),
+        if (gstin != null && gstin.trim().isNotEmpty)
+          'gstin': gstin.trim().toUpperCase(),
+        if (pan != null && pan.trim().isNotEmpty)
+          'pan': pan.trim().toUpperCase(),
+        if (addressLine1 != null && addressLine1.trim().isNotEmpty)
+          'addressLine1': addressLine1.trim(),
+        if (city != null && city.trim().isNotEmpty) 'city': city.trim(),
+        if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
+        if (stateCode != null && stateCode.trim().isNotEmpty)
+          'stateCode': stateCode.trim(),
+        if (pincode != null && pincode.trim().isNotEmpty)
+          'pincode': pincode.trim(),
+        if (taxType != null && taxType.trim().isNotEmpty)
+          'taxType': taxType.trim(),
+        if (defaultBillFormat != null && defaultBillFormat.trim().isNotEmpty)
+          'defaultBillFormat': defaultBillFormat.trim(),
+      };
+
+      var response = await _apiClient.patch(
+        ApiConstants.authBusinessSetup,
+        body: payload,
+        token: _currentSession?.token,
+      );
+
+      // Handle 401 with automatic token refresh attempt
+      if (response.statusCode == 401) {
+        final refreshed = await refreshSession();
+        if (refreshed) {
+          response = await _apiClient.patch(
+            ApiConstants.authBusinessSetup,
+            body: payload,
+            token: _currentSession?.token,
+          );
+        }
+      }
+
+      if (response.isSuccess) {
+        return AuthResult.success(
+          user: _currentSession?.user ??
+              const AuthUser(id: '', email: '', fullName: ''),
+          session: _currentSession ??
+              AuthSession(
+                token: '',
+                user: const AuthUser(id: '', email: '', fullName: ''),
+                expiresAt: DateTime.now(),
+              ),
+        );
+      } else {
+        return AuthResult.failure(
+          response.message ??
+              'Failed to update business configuration (${response.statusCode}).',
+        );
+      }
+    } else {
+      // Mock mode
+      await Future.delayed(const Duration(milliseconds: 300));
+      return AuthResult.success(
+        user: _currentSession?.user ??
+            const AuthUser(id: '', email: '', fullName: ''),
+        session: _currentSession ??
+            AuthSession(
+              token: '',
+              user: const AuthUser(id: '', email: '', fullName: ''),
+              expiresAt: DateTime.now(),
+            ),
         isDevMock: true,
       );
     }

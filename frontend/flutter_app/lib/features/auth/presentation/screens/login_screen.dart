@@ -283,46 +283,64 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Environment Mode Indicator Badge
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 24),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDev
-                            ? AppColors.primaryLight.withValues(alpha: 0.5)
-                            : Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isDev ? AppColors.border : Colors.green.shade200,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isDev
-                                ? Icons.developer_mode_rounded
-                                : Icons.cloud_done_rounded,
-                            size: 18,
-                            color: isDev ? AppColors.primary : Colors.green.shade700,
+                    InkWell(
+                      onTap: () {
+                        final newMode = isDev ? AuthMode.restBackend : AuthMode.devMock;
+                        SessionManager.instance.setAuthMode(newMode);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              newMode == AuthMode.restBackend
+                                  ? 'Switched to REST Backend Mode (${ApiConstants.defaultBaseUrl})'
+                                  : 'Switched to Local Dev Mock Mode',
+                            ),
+                            duration: const Duration(seconds: 2),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 24),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDev
+                              ? AppColors.primaryLight.withValues(alpha: 0.5)
+                              : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isDev ? AppColors.border : Colors.green.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
                               isDev
-                                  ? 'Dev Auth Mode: Use owner@airthai.in / Admin@123'
-                                  : 'Backend Mode: ${ApiConstants.defaultBaseUrl}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: isDev
-                                    ? AppColors.textPrimary
-                                    : Colors.green.shade900,
+                                  ? Icons.developer_mode_rounded
+                                  : Icons.cloud_done_rounded,
+                              size: 18,
+                              color: isDev ? AppColors.primary : Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                isDev
+                                    ? 'Dev Auth Mode (tap to toggle): owner@airthai.in / Admin@123'
+                                    : 'Backend Mode (tap to toggle): ${ApiConstants.defaultBaseUrl}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDev
+                                      ? AppColors.textPrimary
+                                      : Colors.green.shade900,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
 

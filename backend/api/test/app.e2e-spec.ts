@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DatabaseHealthService } from '../src/database/database-health.service';
@@ -22,6 +22,7 @@ describe('AppController (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
   });
 
@@ -47,6 +48,19 @@ describe('AppController (e2e)', () => {
         expect(res.body).toHaveProperty('status', 'ready');
         expect(res.body.services.database).toHaveProperty('status', 'up');
       });
+  });
+
+  it('/auth/login (POST) should return 400 when body is invalid', () => {
+    return request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'not-an-email', password: '123' })
+      .expect(400);
+  });
+
+  it('/auth/me (GET) should return 401 Unauthorized without token', () => {
+    return request(app.getHttpServer())
+      .get('/auth/me')
+      .expect(401);
   });
 });
 

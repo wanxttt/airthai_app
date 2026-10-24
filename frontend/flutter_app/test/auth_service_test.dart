@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:airthai/core/constants/storage_keys.dart';
 import 'package:airthai/core/network/api_client.dart';
 import 'package:airthai/core/security/session_manager.dart';
 import 'package:airthai/core/security/token_manager.dart';
@@ -166,6 +167,47 @@ void main() {
 
       expect(res.success, false);
       expect(res.errorMessage, contains('Cannot connect to backend server'));
+    });
+
+    test('Session restoration initializes active session from secure storage', () async {
+      await tokenManager.saveTokens(
+        accessToken: 'saved_access_token_123',
+        refreshToken: 'saved_refresh_token_123',
+        expiry: DateTime.now().add(const Duration(hours: 1)),
+      );
+      await storage.write(key: StorageKeys.currentUserId, value: 'usr_saved');
+      await storage.write(key: StorageKeys.currentUserEmail, value: 'saved@airthai.in');
+      await storage.write(key: StorageKeys.currentUserName, value: 'Saved User');
+      await storage.write(key: StorageKeys.currentBusinessId, value: 'biz_saved');
+      await storage.write(key: StorageKeys.currentUserRole, value: 'OWNER');
+
+      final newSessionManager = SessionManager(
+        storage: storage,
+        tokenManager: tokenManager,
+      );
+      await newSessionManager.initialize();
+
+      expect(newSessionManager.isAuthenticated, true);
+      expect(newSessionManager.currentUser?.id, 'usr_saved');
+      expect(newSessionManager.currentUser?.email, 'saved@airthai.in');
+      expect(newSessionManager.currentUser?.businessId, 'biz_saved');
+    });
+
+    test('updateBusinessSetup updates business details successfully', () async {
+      await sessionManager.login(
+        email: 'owner@airthai.in',
+        password: 'Admin@123',
+      );
+      expect(sessionManager.isAuthenticated, true);
+
+      final res = await sessionManager.updateBusinessSetup(
+        businessName: 'Sharma Traders Pvt Ltd',
+        gstin: '27AAAAA0000A1Z5',
+        state: 'Maharashtra',
+        taxType: 'REGULAR',
+      );
+
+      expect(res.success, true);
     });
   });
 }

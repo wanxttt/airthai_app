@@ -38,6 +38,16 @@ class ApiClient {
     return _send('GET', path, headers: headers, token: token);
   }
 
+  /// Performs an HTTP PATCH request with JSON payload.
+  Future<ApiResponse<Map<String, dynamic>>> patch(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? headers,
+    String? token,
+  }) async {
+    return _send('PATCH', path, body: body, headers: headers, token: token);
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> _send(
     String method,
     String path, {

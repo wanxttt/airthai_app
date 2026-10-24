@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/api_constants.dart';
 import '../../../../core/security/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_shell.dart';
@@ -15,6 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
+  final _businessNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -29,6 +31,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _businessNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
@@ -65,6 +68,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text,
         phone: _phoneController.text,
         password: _passwordController.text,
+        businessName: _businessNameController.text.trim().isNotEmpty
+            ? _businessNameController.text.trim()
+            : null,
       );
 
       if (!mounted) return;
@@ -82,7 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (_) => const AppShell(),
+            builder: (_) => const AppShell(showBusinessOnboarding: true),
           ),
           (route) => false,
         );
@@ -150,6 +156,83 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       icon: const Icon(
                         Icons.arrow_back_rounded,
                         color: AppColors.textPrimary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Environment Mode Indicator Badge
+                    InkWell(
+                      onTap: () {
+                        final currentMode = SessionManager.instance.authMode;
+                        final newMode = currentMode == AuthMode.devMock
+                            ? AuthMode.restBackend
+                            : AuthMode.devMock;
+                        SessionManager.instance.setAuthMode(newMode);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            duration: const Duration(seconds: 2),
+                            content: Text(
+                              newMode == AuthMode.restBackend
+                                  ? 'Switched to Live REST Backend (${ApiConstants.defaultBaseUrl})'
+                                  : 'Switched to Local Development Mock Mode',
+                            ),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: SessionManager.instance.authMode ==
+                                  AuthMode.devMock
+                              ? AppColors.primaryLight.withValues(alpha: 0.5)
+                              : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: SessionManager.instance.authMode ==
+                                    AuthMode.devMock
+                                ? AppColors.border
+                                : Colors.green.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              SessionManager.instance.authMode ==
+                                      AuthMode.devMock
+                                  ? Icons.developer_mode_rounded
+                                  : Icons.cloud_done_rounded,
+                              size: 18,
+                              color: SessionManager.instance.authMode ==
+                                      AuthMode.devMock
+                                  ? AppColors.primary
+                                  : Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                SessionManager.instance.authMode ==
+                                        AuthMode.devMock
+                                    ? 'Dev Auth Mode (tap to toggle to Backend)'
+                                    : 'Backend Mode (tap to toggle): ${ApiConstants.defaultBaseUrl}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: SessionManager.instance.authMode ==
+                                          AuthMode.devMock
+                                      ? AppColors.textPrimary
+                                      : Colors.green.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -411,6 +494,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                         return null;
                       },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Business name
+                    _buildLabel('Business name (Optional)'),
+                    const SizedBox(height: 8),
+
+                    TextFormField(
+                      controller: _businessNameController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      enabled: !_isLoading,
+                      decoration: const InputDecoration(
+                        hintText: 'Enter your business or enterprise name',
+                        prefixIcon: Icon(
+                          Icons.store_rounded,
+                        ),
+                      ),
                     ),
 
                     const SizedBox(height: 16),

@@ -5,7 +5,10 @@ class ApiConstants {
   const ApiConstants._();
 
   /// Default API base URL for NestJS backend (configurable via environment)
-  static const String defaultBaseUrl = 'http://localhost:3000';
+  static const String defaultBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   /// Request timeouts
   static const Duration connectTimeout = Duration(seconds: 10);
@@ -18,6 +21,7 @@ class ApiConstants {
   static const String authLogout = '/api/v1/auth/logout';
   static const String authForgotPassword = '/api/v1/auth/forgot-password';
   static const String authMe = '/api/v1/auth/me';
+  static const String authBusinessSetup = '/api/v1/auth/business-setup';
 
   /// HTTP Headers
   static const String headerAuthorization = 'Authorization';
