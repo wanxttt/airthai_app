@@ -52,6 +52,19 @@ class ApiConstants {
   static const String expenseCategories = '/api/v1/expenses/categories';
   static const String expenseSummary = '/api/v1/expenses/summary';
 
+  /// Accounting endpoints
+  static const String accountingAccounts = '/api/v1/accounting/accounts';
+  static const String accountingJournals = '/api/v1/accounting/journals';
+  static const String accountingTrialBalance = '/api/v1/accounting/reports/trial-balance';
+  static const String accountingProfitLoss = '/api/v1/accounting/reports/profit-and-loss';
+  static const String accountingReceivables = '/api/v1/accounting/reports/receivables';
+  static const String accountingPayables = '/api/v1/accounting/reports/payables';
+
+  /// GST statutory preparation endpoints
+  static const String gstGstr1 = '/api/v1/gst/gstr-1';
+  static const String gstGstr3b = '/api/v1/gst/gstr-3b';
+  static const String gstSummary = '/api/v1/gst/summary';
+
   /// HTTP Headers
   static const String headerAuthorization = 'Authorization';
   static const String headerContentType = 'Content-Type';

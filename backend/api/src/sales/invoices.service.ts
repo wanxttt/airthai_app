@@ -3,9 +3,11 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from './sequence.service';
+import { AccountingService } from '../accounting/accounting.service';
 import { TaxCalculatorUtil } from './utils/tax-calculator.util';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
@@ -17,6 +19,7 @@ export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService,
+    @Optional() private readonly accountingService?: AccountingService,
   ) {}
 
   /**
@@ -445,6 +448,10 @@ export class InvoicesService {
         },
       });
 
+      if (this.accountingService && !invoice.totalAmount.isZero()) {
+        await this.accountingService.postInvoiceIssuedJournal(businessId, invoice, tx);
+      }
+
       return {
         success: true,
         statusCode: 201,
@@ -562,6 +569,10 @@ export class InvoicesService {
           },
         },
       });
+
+      if (this.accountingService && !existing.totalAmount.isZero()) {
+        await this.accountingService.postInvoiceCancelledJournal(businessId, existing, tx);
+      }
 
       return {
         success: true,

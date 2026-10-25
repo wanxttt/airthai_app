@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AccountingService } from '../accounting/accounting.service';
 import { PrismaService } from '../database/prisma.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { QueryPurchasesDto } from './dto/query-purchases.dto';
@@ -12,7 +14,10 @@ import { PaymentStatus, Prisma, PurchaseStatus, StockMovementType } from '@prism
 
 @Injectable()
 export class PurchasesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly accountingService?: AccountingService,
+  ) {}
 
   /**
    * Find paginated and filtered purchase bills for the tenant.
@@ -433,6 +438,10 @@ export class PurchasesService {
       }
 
       // 3. Write Audit Log
+      if (this.accountingService && !existing.totalAmount.isZero()) {
+        await this.accountingService.postPurchaseCancelledJournal(businessId, existing, tx);
+      }
+
       await tx.auditLog.create({
         data: {
           businessId,
@@ -526,6 +535,10 @@ export class PurchasesService {
     }
 
     // 4. Audit Log
+    if (this.accountingService && !purchase.totalAmount.isZero()) {
+      await this.accountingService.postPurchaseReceivedJournal(businessId, purchase, tx);
+    }
+
     await tx.auditLog.create({
       data: {
         businessId,

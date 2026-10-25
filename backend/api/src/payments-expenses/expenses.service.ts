@@ -4,7 +4,9 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { AccountingService } from '../accounting/accounting.service';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../sales/sequence.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -31,6 +33,7 @@ export class ExpensesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService,
+    @Optional() private readonly accountingService?: AccountingService,
   ) {}
 
   /**
@@ -139,6 +142,10 @@ export class ExpensesService {
       });
 
       // Audit Log
+      if (this.accountingService && !expense.amount.isZero()) {
+        await this.accountingService.postExpenseJournal(businessId, expense, tx);
+      }
+
       await tx.auditLog.create({
         data: {
           businessId,
@@ -326,6 +333,10 @@ export class ExpensesService {
         where: { businessId_id: { businessId, id } },
       });
 
+      if (this.accountingService && !expense.amount.isZero()) {
+        await this.accountingService.postExpenseDeletedJournal(businessId, expense, tx);
+      }
+
       await tx.auditLog.create({
         data: {
           businessId,
@@ -349,3 +360,4 @@ export class ExpensesService {
     });
   }
 }
+

@@ -13,6 +13,7 @@ import '../../features/sales/presentation/screens/sales_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_screen.dart';
 import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/expenses/presentation/screens/expenses_screen.dart';
+import '../../features/accounting/presentation/screens/accounting_screen.dart';
 
 class AppShell extends StatefulWidget {
   final bool showBusinessOnboarding;
@@ -503,6 +504,8 @@ class _AppShellState extends State<AppShell> {
         return const PaymentsScreen();
       case 7:
         return const ExpensesScreen();
+      case 8:
+        return const AccountingScreen();
       default:
         return Center(
           child: Text(

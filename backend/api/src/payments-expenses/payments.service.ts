@@ -4,7 +4,9 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { AccountingService } from '../accounting/accounting.service';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../sales/sequence.service';
 import { CreatePaymentDto, VoidPaymentDto } from './dto/create-payment.dto';
@@ -18,6 +20,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService,
+    @Optional() private readonly accountingService?: AccountingService,
   ) {}
 
   /**
@@ -192,6 +195,10 @@ export class PaymentsService {
       });
 
       // 7. Audit Log
+      if (this.accountingService && !payment.amount.isZero()) {
+        await this.accountingService.postReceiptJournal(businessId, payment, tx);
+      }
+
       await tx.auditLog.create({
         data: {
           businessId,
@@ -393,6 +400,10 @@ export class PaymentsService {
       });
 
       // 7. Audit Log
+      if (this.accountingService && !payment.amount.isZero()) {
+        await this.accountingService.postDisbursementJournal(businessId, payment, tx);
+      }
+
       await tx.auditLog.create({
         data: {
           businessId,
@@ -641,6 +652,10 @@ export class PaymentsService {
       });
 
       // Audit Log for the reversal
+      if (this.accountingService && !payment.amount.isZero()) {
+        await this.accountingService.postPaymentVoidedJournal(businessId, payment, tx);
+      }
+
       await tx.auditLog.create({
         data: {
           businessId,
@@ -741,3 +756,4 @@ export class PaymentsService {
     };
   }
 }
+

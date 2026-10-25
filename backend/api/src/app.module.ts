@@ -12,6 +12,7 @@ import { MasterDataModule } from './master-data/master-data.module';
 import { SalesModule } from './sales/sales.module';
 import { PurchasesInventoryModule } from './purchases-inventory/purchases-inventory.module';
 import { PaymentsExpensesModule } from './payments-expenses/payments-expenses.module';
+import { AccountingModule } from './accounting/accounting.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PaymentsExpensesModule } from './payments-expenses/payments-expenses.mo
     SalesModule,
     PurchasesInventoryModule,
     PaymentsExpensesModule,
+    AccountingModule,
   ],
 })
 export class AppModule {}

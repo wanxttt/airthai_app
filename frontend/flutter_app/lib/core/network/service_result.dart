@@ -12,9 +12,13 @@ class ServiceResult<T> {
     this.statusCode = 200,
   });
 
+  bool get isSuccess => success;
+  String? get error => errorMessage;
+
   factory ServiceResult.success(T data, {int statusCode = 200}) =>
       ServiceResult(success: true, data: data, statusCode: statusCode);
 
   factory ServiceResult.failure(String message, {int statusCode = 400}) =>
       ServiceResult(success: false, errorMessage: message, statusCode: statusCode);
 }
+
