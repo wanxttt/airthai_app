@@ -48,6 +48,15 @@ class ApiClient {
     return _send('PATCH', path, body: body, headers: headers, token: token);
   }
 
+  /// Performs an HTTP DELETE request.
+  Future<ApiResponse<Map<String, dynamic>>> delete(
+    String path, {
+    Map<String, String>? headers,
+    String? token,
+  }) async {
+    return _send('DELETE', path, headers: headers, token: token);
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> _send(
     String method,
     String path, {

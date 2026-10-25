@@ -8,6 +8,8 @@ import aiConfig from './config/ai.config';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
+import { MasterDataModule } from './master-data/master-data.module';
+import { SalesModule } from './sales/sales.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { AuthModule } from './auth/auth.module';
     DatabaseModule,
     HealthModule,
     AuthModule,
+    MasterDataModule,
+    SalesModule,
   ],
 })
 export class AppModule {}

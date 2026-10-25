@@ -23,6 +23,17 @@ class ApiConstants {
   static const String authMe = '/api/v1/auth/me';
   static const String authBusinessSetup = '/api/v1/auth/business-setup';
 
+  /// Master Data endpoints
+  static const String products = '/api/v1/products';
+  static const String categories = '/api/v1/categories';
+  static const String units = '/api/v1/units';
+  static const String customers = '/api/v1/customers';
+  static const String suppliers = '/api/v1/suppliers';
+
+  /// Sales & Invoicing endpoints
+  static const String invoices = '/api/v1/invoices';
+  static const String quotations = '/api/v1/quotations';
+
   /// HTTP Headers
   static const String headerAuthorization = 'Authorization';
   static const String headerContentType = 'Content-Type';

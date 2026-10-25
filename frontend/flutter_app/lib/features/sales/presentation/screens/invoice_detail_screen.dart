@@ -1,0 +1,532 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../../core/services/sales_service.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../models/sales_models.dart';
+
+class InvoiceDetailScreen extends StatefulWidget {
+  final InvoiceModel invoice;
+  final VoidCallback? onInvoiceUpdated;
+
+  const InvoiceDetailScreen({
+    super.key,
+    required this.invoice,
+    this.onInvoiceUpdated,
+  });
+
+  @override
+  State<InvoiceDetailScreen> createState() => _InvoiceDetailScreenState();
+}
+
+class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
+  late InvoiceModel _currentInvoice;
+  bool _isCancelling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentInvoice = widget.invoice;
+  }
+
+  Future<void> _handleCancelInvoice() async {
+    final reasonCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Tax Invoice'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to cancel invoice ${_currentInvoice.invoiceNumber}?\n\nThis will reverse the customer balance and return the items to inventory.',
+                style: AppTextStyles.bodySecondary,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: reasonCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Cancellation Reason *',
+                  hintText: 'e.g., Order cancelled by customer, data entry mistake',
+                ),
+                validator: (val) =>
+                    (val == null || val.trim().isEmpty) ? 'Please enter a reason' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Invoice'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Confirm Cancellation'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _isCancelling = true);
+      final res = await SalesService.instance.cancelInvoice(
+        _currentInvoice.id,
+        reasonCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+
+      if (res.success && res.data != null) {
+        setState(() => _currentInvoice = res.data!);
+        widget.onInvoiceUpdated?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Invoice cancelled and balance reversed successfully.'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(res.errorMessage ?? 'Failed to cancel invoice.'),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showPrintShareDialog() {
+    final invoiceSummary = '''
+=====================================================
+                    TAX INVOICE
+=====================================================
+Invoice No: ${_currentInvoice.invoiceNumber}
+Date: ${_currentInvoice.invoiceDate.day}/${_currentInvoice.invoiceDate.month}/${_currentInvoice.invoiceDate.year}
+Customer: ${_currentInvoice.customerName ?? 'Walk-in'}
+GSTIN: ${_currentInvoice.customerGstin ?? 'Unregistered'}
+Place of Supply: ${_currentInvoice.placeOfSupply}
+-----------------------------------------------------
+ITEMS:
+${_currentInvoice.items.map((it) => '${it.description} x ${it.quantity} @ ₹${it.unitPrice.toStringAsFixed(2)} = ₹${it.totalAmount.toStringAsFixed(2)}').join('\n')}
+-----------------------------------------------------
+Subtotal: ₹${_currentInvoice.subtotal.toStringAsFixed(2)}
+Taxable Amount: ₹${_currentInvoice.taxableAmount.toStringAsFixed(2)}
+${_currentInvoice.isInterState ? 'IGST: ₹${_currentInvoice.igstAmount.toStringAsFixed(2)}' : 'CGST: ₹${_currentInvoice.cgstAmount.toStringAsFixed(2)}\nSGST: ₹${_currentInvoice.sgstAmount.toStringAsFixed(2)}'}
+Round Off: ₹${_currentInvoice.roundOff.toStringAsFixed(2)}
+TOTAL AMOUNT: ₹${_currentInvoice.totalAmount.toStringAsFixed(2)}
+Balance Due: ₹${_currentInvoice.balanceAmount.toStringAsFixed(2)}
+Status: ${_currentInvoice.status}
+=====================================================
+Generated by AirthAI MSME OS
+''';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.print_rounded, color: AppColors.primary),
+            const SizedBox(width: 8),
+            const Flexible(child: Text('Print / Share Tax Invoice', overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Standard formatted GST tax invoice ready for printing, sharing via WhatsApp, or email:',
+                  style: AppTextStyles.bodySecondary,
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: SelectableText(
+                    invoiceSummary,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: invoiceSummary));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Invoice copied to clipboard.')),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text('Copy Text'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Sending to system print queue...')),
+              );
+            },
+            icon: const Icon(Icons.print_rounded, size: 16),
+            label: const Text('Print Document'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = _currentInvoice;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text(inv.invoiceNumber),
+        actions: [
+          IconButton(
+            tooltip: 'Print / Share',
+            icon: const Icon(Icons.print_rounded),
+            onPressed: _showPrintShareDialog,
+          ),
+          if (!inv.isCancelled)
+            IconButton(
+              tooltip: 'Cancel Invoice',
+              icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+              onPressed: _isCancelling ? null : _handleCancelInvoice,
+            ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              color: AppColors.surface,
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('TAX INVOICE',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                    letterSpacing: 1.2,
+                                  )),
+                              const SizedBox(height: 6),
+                              Text(inv.invoiceNumber,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  )),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Date: ${inv.invoiceDate.day}/${inv.invoiceDate.month}/${inv.invoiceDate.year}',
+                                style: AppTextStyles.bodySecondary,
+                              ),
+                              if (inv.dueDate != null)
+                                Text(
+                                  'Due Date: ${inv.dueDate!.day}/${inv.dueDate!.month}/${inv.dueDate!.year}',
+                                  style: AppTextStyles.bodySecondary,
+                                ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: inv.statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: inv.statusColor),
+                          ),
+                          child: Text(
+                            inv.status,
+                            style: TextStyle(
+                              color: inv.statusColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (inv.isCancelled && inv.cancellationReason != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, color: Colors.red, size: 20),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                'Cancelled on ${inv.cancelledAt?.day}/${inv.cancelledAt?.month}/${inv.cancelledAt?.year}. Reason: ${inv.cancellationReason}',
+                                style: TextStyle(color: Colors.red.shade900, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const Divider(height: 36),
+
+                    // Bill To & Place of Supply
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('BILL TO', style: AppTextStyles.label),
+                              const SizedBox(height: 6),
+                              Text(
+                                inv.customerName ?? 'Walk-in Customer',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                              ),
+                              if (inv.customerPhone != null)
+                                Text('Phone: ${inv.customerPhone}', style: AppTextStyles.bodySecondary),
+                              if (inv.customerGstin != null)
+                                Text('GSTIN: ${inv.customerGstin}',
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text('TAX DETAILS', style: AppTextStyles.label),
+                              const SizedBox(height: 6),
+                              Text('Place of Supply: ${inv.placeOfSupply}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600)),
+                              Text(inv.isInterState ? 'Type: Inter-State (IGST)' : 'Type: Intra-State (CGST + SGST)',
+                                  style: AppTextStyles.bodySecondary),
+                              if (inv.isReverseCharge)
+                                const Text('Reverse Charge: YES',
+                                    style: TextStyle(fontWeight: FontWeight.w600, color: Colors.orange)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Items Table
+                    const Text('LINE ITEMS', style: AppTextStyles.label),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            color: Colors.grey.shade50,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            child: const Row(
+                              children: [
+                                Expanded(flex: 3, child: Text('Description', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                                Expanded(child: Text('Qty', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                                Expanded(child: Text('Rate (₹)', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                                Expanded(child: Text('GST%', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                                Expanded(child: Text('Total (₹)', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ...inv.items.map((it) => Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(it.description, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                          if (it.hsnCode != null)
+                                            Text('HSN: ${it.hsnCode}', style: AppTextStyles.label),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(it.quantity.toStringAsFixed(0), textAlign: TextAlign.center),
+                                    ),
+                                    Expanded(
+                                      child: Text(it.unitPrice.toStringAsFixed(2), textAlign: TextAlign.right),
+                                    ),
+                                    Expanded(
+                                      child: Text('${it.gstRate.toStringAsFixed(0)}%', textAlign: TextAlign.right),
+                                    ),
+                                    Expanded(
+                                      child: Text(it.totalAmount.toStringAsFixed(2),
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    ),
+                                  ],
+                                ),
+                              )),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Totals Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (inv.notes != null) ...[
+                                const Text('Notes', style: AppTextStyles.label),
+                                const SizedBox(height: 4),
+                                Text(inv.notes!, style: AppTextStyles.bodySecondary),
+                                const SizedBox(height: 16),
+                              ],
+                              if (inv.terms != null) ...[
+                                const Text('Terms & Conditions', style: AppTextStyles.label),
+                                const SizedBox(height: 4),
+                                Text(inv.terms!, style: AppTextStyles.bodySecondary),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Column(
+                              children: [
+                                _buildSummaryLine('Subtotal', '₹${inv.subtotal.toStringAsFixed(2)}'),
+                                if (inv.discountAmount > 0)
+                                  _buildSummaryLine('Discount', '-₹${inv.discountAmount.toStringAsFixed(2)}', color: Colors.green),
+                                _buildSummaryLine('Taxable Amount', '₹${inv.taxableAmount.toStringAsFixed(2)}'),
+                                if (!inv.isInterState) ...[
+                                  _buildSummaryLine('CGST', '₹${inv.cgstAmount.toStringAsFixed(2)}'),
+                                  _buildSummaryLine('SGST', '₹${inv.sgstAmount.toStringAsFixed(2)}'),
+                                ] else ...[
+                                  _buildSummaryLine('IGST', '₹${inv.igstAmount.toStringAsFixed(2)}'),
+                                ],
+                                if (inv.roundOff != 0)
+                                  _buildSummaryLine('Round Off', '${inv.roundOff > 0 ? '+' : ''}₹${inv.roundOff.toStringAsFixed(2)}'),
+                                const Divider(height: 16),
+                                _buildSummaryLine(
+                                  'Grand Total',
+                                  '₹${inv.totalAmount.toStringAsFixed(2)}',
+                                  isBold: true,
+                                  fontSize: 16,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(height: 6),
+                                _buildSummaryLine(
+                                  'Balance Due',
+                                  '₹${inv.balanceAmount.toStringAsFixed(2)}',
+                                  isBold: true,
+                                  color: inv.balanceAmount > 0 ? Colors.orange.shade800 : Colors.green,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryLine(String label, String value,
+      {bool isBold = false, double fontSize = 13, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                fontSize: fontSize,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
+              fontSize: fontSize,
+              color: color ?? AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

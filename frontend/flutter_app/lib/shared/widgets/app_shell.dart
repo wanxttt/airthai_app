@@ -6,6 +6,10 @@ import '../../core/theme/app_dimensions.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../features/auth/presentation/screens/business_setup_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/customers/presentation/screens/customers_screen.dart';
+import '../../features/inventory/presentation/screens/inventory_screen.dart';
+import '../../features/sales/presentation/screens/sales_screen.dart';
+import '../../features/suppliers/presentation/screens/suppliers_screen.dart';
 
 class AppShell extends StatefulWidget {
   final bool showBusinessOnboarding;
@@ -476,12 +480,23 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _buildContent() {
-    return Center(
-      child: Text(
-        '${navigationItems[selectedIndex].label} Screen',
-        style: AppTextStyles.headingLarge,
-      ),
-    );
+    switch (selectedIndex) {
+      case 1:
+        return const SalesScreen();
+      case 3:
+        return const InventoryScreen();
+      case 4:
+        return const CustomersScreen();
+      case 5:
+        return const SuppliersScreen();
+      default:
+        return Center(
+          child: Text(
+            '${navigationItems[selectedIndex].label} Screen',
+            style: AppTextStyles.headingLarge,
+          ),
+        );
+    }
   }
 
   Widget _buildUserSection() {
