@@ -11,6 +11,8 @@ import '../../features/inventory/presentation/screens/inventory_screen.dart';
 import '../../features/purchases/presentation/screens/purchases_screen.dart';
 import '../../features/sales/presentation/screens/sales_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_screen.dart';
+import '../../features/payments/presentation/screens/payments_screen.dart';
+import '../../features/expenses/presentation/screens/expenses_screen.dart';
 
 class AppShell extends StatefulWidget {
   final bool showBusinessOnboarding;
@@ -155,6 +157,11 @@ class _AppShellState extends State<AppShell> {
       label: 'Suppliers',
       icon: Icons.local_shipping_outlined,
       selectedIcon: Icons.local_shipping_rounded,
+    ),
+    _NavigationItem(
+      label: 'Payments',
+      icon: Icons.payments_outlined,
+      selectedIcon: Icons.payments_rounded,
     ),
     _NavigationItem(
       label: 'Expenses',
@@ -492,6 +499,10 @@ class _AppShellState extends State<AppShell> {
         return const CustomersScreen();
       case 5:
         return const SuppliersScreen();
+      case 6:
+        return const PaymentsScreen();
+      case 7:
+        return const ExpensesScreen();
       default:
         return Center(
           child: Text(

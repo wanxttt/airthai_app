@@ -26,6 +26,12 @@ abstract final class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
+  static const TextStyle bodyPrimary = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: AppColors.textPrimary,
+  );
+
   static const TextStyle bodySecondary = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.w400,
@@ -35,6 +41,12 @@ abstract final class AppTextStyles {
   static const TextStyle label = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w600,
+    color: AppColors.textSecondary,
+  );
+
+  static const TextStyle caption = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
   );
 }

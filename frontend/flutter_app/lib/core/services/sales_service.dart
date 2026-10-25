@@ -1,22 +1,10 @@
-import 'package:flutter/foundation.dart';
 import '../constants/api_constants.dart';
 import '../network/api_client.dart';
 import '../security/session_manager.dart';
 import '../../features/sales/models/sales_models.dart';
 
-class ServiceResult<T> {
-  final bool success;
-  final T? data;
-  final String? errorMessage;
-  final int? statusCode;
-
-  const ServiceResult({
-    required this.success,
-    this.data,
-    this.errorMessage,
-    this.statusCode,
-  });
-}
+import '../network/service_result.dart';
+export '../network/service_result.dart';
 
 class SalesService {
   SalesService._();

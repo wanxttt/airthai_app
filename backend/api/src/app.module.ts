@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { MasterDataModule } from './master-data/master-data.module';
 import { SalesModule } from './sales/sales.module';
 import { PurchasesInventoryModule } from './purchases-inventory/purchases-inventory.module';
+import { PaymentsExpensesModule } from './payments-expenses/payments-expenses.module';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { PurchasesInventoryModule } from './purchases-inventory/purchases-invent
     MasterDataModule,
     SalesModule,
     PurchasesInventoryModule,
+    PaymentsExpensesModule,
   ],
 })
 export class AppModule {}
-

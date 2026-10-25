@@ -29,7 +29,7 @@ export class SequenceService {
    */
   public async getNextNumber(
     businessId: string,
-    documentType: 'INVOICE' | 'QUOTATION' | 'ORDER',
+    documentType: 'INVOICE' | 'QUOTATION' | 'ORDER' | 'RECEIPT' | 'PAYMENT' | 'EXPENSE' | string,
     defaultPrefix: string = 'INV',
     date: Date = new Date(),
     tx?: Prisma.TransactionClient,

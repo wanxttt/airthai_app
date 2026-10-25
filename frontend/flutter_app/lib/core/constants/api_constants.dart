@@ -40,6 +40,18 @@ class ApiConstants {
   static const String inventoryProducts = '/api/v1/inventory/products';
   static const String inventoryAdjustments = '/api/v1/inventory/adjustments';
 
+  /// Payments & Receipts endpoints
+  static const String payments = '/api/v1/payments';
+  static const String customerReceipts = '/api/v1/payments/receipts';
+  static const String supplierPayments = '/api/v1/payments/supplier-payments';
+  static const String customerOutstanding = '/api/v1/payments/outstanding/customer';
+  static const String supplierOutstanding = '/api/v1/payments/outstanding/supplier';
+
+  /// Expenses endpoints
+  static const String expenses = '/api/v1/expenses';
+  static const String expenseCategories = '/api/v1/expenses/categories';
+  static const String expenseSummary = '/api/v1/expenses/summary';
+
   /// HTTP Headers
   static const String headerAuthorization = 'Authorization';
   static const String headerContentType = 'Content-Type';
@@ -47,4 +59,3 @@ class ApiConstants {
   static const String contentTypeJson = 'application/json';
   static const String bearerPrefix = 'Bearer ';
 }
-
