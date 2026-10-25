@@ -8,6 +8,7 @@ import '../../features/auth/presentation/screens/business_setup_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/customers/presentation/screens/customers_screen.dart';
 import '../../features/inventory/presentation/screens/inventory_screen.dart';
+import '../../features/purchases/presentation/screens/purchases_screen.dart';
 import '../../features/sales/presentation/screens/sales_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_screen.dart';
 
@@ -483,6 +484,8 @@ class _AppShellState extends State<AppShell> {
     switch (selectedIndex) {
       case 1:
         return const SalesScreen();
+      case 2:
+        return const PurchasesScreen();
       case 3:
         return const InventoryScreen();
       case 4:

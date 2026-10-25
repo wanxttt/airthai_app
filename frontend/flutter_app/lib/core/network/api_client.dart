@@ -11,6 +11,8 @@ import 'api_response.dart';
 /// Uses Dart core `HttpClient` to ensure zero required external dependencies
 /// while supporting full REST functionality, timeouts, and safe error mapping.
 class ApiClient {
+  static final ApiClient instance = ApiClient();
+
   final String baseUrl;
   final Duration timeout;
 
@@ -32,10 +34,21 @@ class ApiClient {
   /// Performs an HTTP GET request.
   Future<ApiResponse<Map<String, dynamic>>> get(
     String path, {
+    Map<String, dynamic>? queryParams,
     Map<String, String>? headers,
     String? token,
   }) async {
-    return _send('GET', path, headers: headers, token: token);
+    String fullPath = path;
+    if (queryParams != null && queryParams.isNotEmpty) {
+      final validParams = queryParams.entries
+          .where((e) => e.value != null && e.value.toString().isNotEmpty)
+          .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}')
+          .join('&');
+      if (validParams.isNotEmpty) {
+        fullPath = '$fullPath?$validParams';
+      }
+    }
+    return _send('GET', fullPath, headers: headers, token: token);
   }
 
   /// Performs an HTTP PATCH request with JSON payload.

@@ -169,8 +169,8 @@ class SalesService {
         queryParams: queryParams,
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final list = (response.data['data'] as List<dynamic>?)
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final list = (response.data!['data'] as List<dynamic>?)
                 ?.map((j) => InvoiceModel.fromJson(j as Map<String, dynamic>))
                 .toList() ??
             [];
@@ -213,8 +213,8 @@ class SalesService {
 
     if (mode == AuthMode.restBackend) {
       final response = await ApiClient.instance.get('${ApiConstants.invoices}/$id');
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = InvoiceModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final data = InvoiceModel.fromJson(response.data!['data'] as Map<String, dynamic>);
         return ServiceResult(success: true, data: data, statusCode: response.statusCode);
       }
       return ServiceResult(
@@ -242,8 +242,8 @@ class SalesService {
         body: data,
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final invoice = InvoiceModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final invoice = InvoiceModel.fromJson(response.data!['data'] as Map<String, dynamic>);
         return ServiceResult(success: true, data: invoice, statusCode: response.statusCode);
       }
       return ServiceResult(
@@ -369,8 +369,8 @@ class SalesService {
         body: {'reason': reason},
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final invoice = InvoiceModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final invoice = InvoiceModel.fromJson(response.data!['data'] as Map<String, dynamic>);
         return ServiceResult(success: true, data: invoice, statusCode: response.statusCode);
       }
       return ServiceResult(
@@ -447,8 +447,8 @@ class SalesService {
         queryParams: queryParams,
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final list = (response.data['data'] as List<dynamic>?)
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final list = (response.data!['data'] as List<dynamic>?)
                 ?.map((j) => QuotationModel.fromJson(j as Map<String, dynamic>))
                 .toList() ??
             [];
@@ -489,8 +489,8 @@ class SalesService {
         body: data,
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final quotation = QuotationModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final quotation = QuotationModel.fromJson(response.data!['data'] as Map<String, dynamic>);
         return ServiceResult(success: true, data: quotation, statusCode: response.statusCode);
       }
       return ServiceResult(
@@ -570,8 +570,8 @@ class SalesService {
         '${ApiConstants.quotations}/$id/convert-to-invoice',
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final invoice = InvoiceModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data != null) {
+        final invoice = InvoiceModel.fromJson(response.data!['data'] as Map<String, dynamic>);
         return ServiceResult(success: true, data: invoice, statusCode: response.statusCode);
       }
       return ServiceResult(
@@ -625,3 +625,4 @@ class SalesService {
     });
   }
 }
+

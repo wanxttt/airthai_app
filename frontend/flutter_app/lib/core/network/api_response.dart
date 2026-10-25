@@ -8,6 +8,8 @@ class ApiResponse<T> {
   final String? message;
   final Map<String, dynamic>? errors;
 
+  String? get errorMessage => message;
+
   const ApiResponse({
     required this.statusCode,
     required this.isSuccess,

@@ -34,6 +34,12 @@ class ApiConstants {
   static const String invoices = '/api/v1/invoices';
   static const String quotations = '/api/v1/quotations';
 
+  /// Purchases & Inventory endpoints
+  static const String purchases = '/api/v1/purchases';
+  static const String inventorySummary = '/api/v1/inventory/summary';
+  static const String inventoryProducts = '/api/v1/inventory/products';
+  static const String inventoryAdjustments = '/api/v1/inventory/adjustments';
+
   /// HTTP Headers
   static const String headerAuthorization = 'Authorization';
   static const String headerContentType = 'Content-Type';

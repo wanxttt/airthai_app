@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/services/inventory_service.dart';
 import '../../../../core/services/master_data_service.dart';
+import '../../../../core/services/sales_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../master_data/models/master_data_models.dart';
+import '../../models/inventory_models.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -15,6 +18,10 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+
+  // Inventory valuation & summary state
+  InventorySummaryModel? _summary;
+  bool _isLoadingSummary = false;
 
   // Products state
   List<ProductModel> _products = [];
@@ -34,12 +41,26 @@ class _InventoryScreenState extends State<InventoryScreen>
     _tabController = TabController(length: 3, vsync: this);
     _loadMetadata();
     _loadProducts();
+    _loadSummary();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSummary() async {
+    setState(() => _isLoadingSummary = true);
+    final res = await InventoryService.instance.getSummary();
+    if (mounted) {
+      setState(() {
+        _isLoadingSummary = false;
+        if (res.success && res.data != null) {
+          _summary = res.data;
+        }
+      });
+    }
   }
 
   Future<void> _loadMetadata() async {
@@ -542,9 +563,27 @@ class _InventoryScreenState extends State<InventoryScreen>
               Text(product.description!, style: AppTextStyles.bodySecondary),
               const SizedBox(height: 20),
             ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showStockMovementsModal(product);
+                  },
+                  icon: const Icon(Icons.history_rounded, size: 16),
+                  label: const Text('Movements'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showStockAdjustmentDialog(preselectedProduct: product);
+                  },
+                  icon: const Icon(Icons.tune_rounded, size: 16),
+                  label: const Text('Adjust Stock'),
+                ),
                 OutlinedButton.icon(
                   onPressed: () {
                     Navigator.pop(context);
@@ -553,12 +592,12 @@ class _InventoryScreenState extends State<InventoryScreen>
                   icon: const Icon(Icons.edit_rounded, size: 16),
                   label: const Text('Edit Product'),
                 ),
-                const SizedBox(width: 12),
                 ElevatedButton.icon(
                   onPressed: () async {
                     Navigator.pop(context);
                     await MasterDataService.instance.toggleArchiveProduct(product.id);
                     _loadProducts();
+                    _loadSummary();
                   },
                   icon: Icon(
                     product.isArchived ? Icons.unarchive_rounded : Icons.archive_outlined,
@@ -617,6 +656,7 @@ class _InventoryScreenState extends State<InventoryScreen>
       final res = await MasterDataService.instance.deleteProduct(product.id);
       if (res.success) {
         _loadProducts();
+        _loadSummary();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Product deleted successfully.')),
         );
@@ -629,6 +669,632 @@ class _InventoryScreenState extends State<InventoryScreen>
         );
       }
     }
+  }
+
+  // ==========================================
+  // STOCK ADJUSTMENT & MOVEMENTS AUDIT
+  // ==========================================
+
+  void _showStockAdjustmentDialog({ProductModel? preselectedProduct}) {
+    ProductModel? selectedProduct = preselectedProduct ?? (_products.isNotEmpty ? _products.first : null);
+    String movementType = 'ADJUSTMENT_ADD';
+    final qtyCtrl = TextEditingController(text: '1');
+    final costCtrl = TextEditingController(
+      text: selectedProduct != null ? selectedProduct.purchasePrice.toString() : '0.00',
+    );
+    String reason = 'Inventory Reconciliation';
+    final notesCtrl = TextEditingController();
+    bool isSubmitting = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final isReducing = movementType == 'ADJUSTMENT_SUB' || movementType == 'DAMAGE';
+          final qtyVal = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
+          final currentStock = selectedProduct?.currentStock ?? 0.0;
+          final willExceed = isReducing && (currentStock - qtyVal < 0);
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text('Stock Adjustment'),
+              ],
+            ),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (errorMsg != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Text(errorMsg!, style: TextStyle(color: Colors.red.shade800, fontSize: 13)),
+                      ),
+                    ],
+                    // Product selector
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedProduct?.id,
+                      decoration: const InputDecoration(
+                        labelText: 'Product *',
+                        prefixIcon: Icon(Icons.inventory_2_outlined),
+                      ),
+                      items: _products.map((p) => DropdownMenuItem(
+                        value: p.id,
+                        child: Text('${p.name} (Stock: ${p.currentStock.toStringAsFixed(0)})', overflow: TextOverflow.ellipsis),
+                      )).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          final prod = _products.firstWhere((p) => p.id == val);
+                          setDialogState(() {
+                            selectedProduct = prod;
+                            costCtrl.text = prod.purchasePrice.toString();
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // Movement Type
+                    DropdownButtonFormField<String>(
+                      initialValue: movementType,
+                      decoration: const InputDecoration(
+                        labelText: 'Adjustment Type *',
+                        prefixIcon: Icon(Icons.swap_vert_rounded),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'ADJUSTMENT_ADD',
+                          child: Text('Add Stock (Surplus / Inbound Reconciliation)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'ADJUSTMENT_SUB',
+                          child: Text('Reduce Stock (Discrepancy / Write-off)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'DAMAGE',
+                          child: Text('Damage / Expired / Loss'),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => movementType = val);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: qtyCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Adjustment Quantity *',
+                              prefixIcon: Icon(Icons.format_list_numbered_rounded),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: costCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Unit Cost (₹)',
+                              prefixIcon: Icon(Icons.currency_rupee_rounded),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (willExceed) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Note: This deduction (${qtyVal.toStringAsFixed(0)}) exceeds current stock (${currentStock.toStringAsFixed(0)}). It will be rejected if negative stock is disabled.',
+                        style: TextStyle(color: Colors.orange.shade800, fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: reason,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason *',
+                        prefixIcon: Icon(Icons.rule_folder_outlined),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Inventory Reconciliation', child: Text('Inventory Reconciliation')),
+                        DropdownMenuItem(value: 'Physical Count Discrepancy', child: Text('Physical Count Discrepancy')),
+                        DropdownMenuItem(value: 'Damaged in Warehouse', child: Text('Damaged in Warehouse')),
+                        DropdownMenuItem(value: 'Expired Stock', child: Text('Expired Stock')),
+                        DropdownMenuItem(value: 'Sample / Internal Usage', child: Text('Sample / Internal Usage')),
+                        DropdownMenuItem(value: 'Other Adjustment', child: Text('Other Adjustment')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => reason = val);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: notesCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes / Audit Reference',
+                        hintText: 'e.g. Audit conducted by store manager',
+                        prefixIcon: Icon(Icons.notes_rounded),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        if (selectedProduct == null) {
+                          setDialogState(() => errorMsg = 'Please select a product.');
+                          return;
+                        }
+                        final qty = double.tryParse(qtyCtrl.text.trim());
+                        if (qty == null || qty <= 0) {
+                          setDialogState(() => errorMsg = 'Please enter a valid quantity greater than 0.');
+                          return;
+                        }
+                        final unitCost = double.tryParse(costCtrl.text.trim()) ?? selectedProduct!.purchasePrice;
+
+                        setDialogState(() {
+                          isSubmitting = true;
+                          errorMsg = null;
+                        });
+
+                        final res = await InventoryService.instance.recordAdjustment({
+                          'productId': selectedProduct!.id,
+                          'movementType': movementType,
+                          'quantity': qty,
+                          'unitCost': unitCost,
+                          'reason': reason,
+                          'notes': notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                        });
+
+                        if (!mounted) return;
+                        if (res.success) {
+                          Navigator.pop(ctx);
+                          _loadProducts();
+                          _loadSummary();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: Colors.green,
+                              content: Text('Stock adjustment applied for "${selectedProduct!.name}". Traceable audit movement recorded.'),
+                            ),
+                          );
+                        } else {
+                          setDialogState(() {
+                            isSubmitting = false;
+                            errorMsg = res.errorMessage ?? 'Failed to apply stock adjustment.';
+                          });
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Apply Adjustment'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showStockMovementsModal(ProductModel product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        minChildSize: 0.4,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.history_rounded, color: AppColors.primary, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Stock Movement Audit Trail', style: AppTextStyles.title),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  product.name,
+                                  style: AppTextStyles.bodySecondary,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (product.sku != null) ...[
+                                const Text(' • ', style: AppTextStyles.bodySecondary),
+                                Text('SKU: ${product.sku}', style: AppTextStyles.label),
+                              ],
+                              const Text(' • ', style: AppTextStyles.bodySecondary),
+                              Text(
+                                'Current: ${product.currentStock.toStringAsFixed(0)} ${product.unitSymbol ?? ''}',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: AppColors.border),
+              // Movements content
+              Expanded(
+                child: FutureBuilder<ServiceResult<List<StockMovementModel>>>(
+                  future: InventoryService.instance.getProductMovements(product.id),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError || snapshot.data?.success != true) {
+                      return Center(
+                        child: Text(
+                          snapshot.data?.errorMessage ?? 'Failed to load stock movements.',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      );
+                    }
+                    final movements = snapshot.data!.data ?? [];
+                    if (movements.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.history_toggle_off_rounded, color: AppColors.textMuted, size: 48),
+                            const SizedBox(height: 12),
+                            const Text('No stock movements found', style: AppTextStyles.title),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Movements are generated when purchases are received, sales invoices issued, or stock adjusted.',
+                              style: AppTextStyles.bodySecondary,
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(24),
+                      itemCount: movements.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final m = movements[index];
+                        final isPositive = m.isPositive;
+                        final prefix = isPositive ? '+' : '-';
+                        final qtyAbs = m.quantity.abs();
+
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: m.typeColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  isPositive ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                                  color: m.typeColor,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: m.typeColor.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            m.movementType,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: m.typeColor,
+                                            ),
+                                          ),
+                                        ),
+                                        if (m.referenceType != null) ...[
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              'Ref: ${m.referenceType}${m.referenceId != null ? ' (#${m.referenceId})' : ''}',
+                                              style: AppTextStyles.label,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${m.createdAt.day.toString().padLeft(2, '0')}/${m.createdAt.month.toString().padLeft(2, '0')}/${m.createdAt.year} ${m.createdAt.hour.toString().padLeft(2, '0')}:${m.createdAt.minute.toString().padLeft(2, '0')}${m.notes != null ? ' • ${m.notes}' : ''}',
+                                      style: AppTextStyles.bodySecondary,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '$prefix${qtyAbs.toStringAsFixed(0)} ${product.unitSymbol ?? ''}',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: isPositive ? Colors.green : Colors.red.shade700,
+                                    ),
+                                  ),
+                                  if (m.unitCost > 0)
+                                    Text(
+                                      '₹${m.unitCost.toStringAsFixed(2)} / unit',
+                                      style: AppTextStyles.label,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildValuationSummary() {
+    final s = _summary;
+    final totalValuation = s?.totalValuation ?? 0.0;
+    final totalStockQty = s?.totalStockQuantity ?? 0.0;
+    final lowStockCount = s?.lowStockCount ?? 0;
+    final outOfStockCount = s?.outOfStockCount ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 900;
+          if (isNarrow) {
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryMetricCard(
+                        'Total Inventory Valuation',
+                        '₹${totalValuation.toStringAsFixed(2)}',
+                        Icons.account_balance_wallet_rounded,
+                        AppColors.primary,
+                        subtitle: 'Weighted Avg Cost (WAC)',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryMetricCard(
+                        'Total Stock Quantity',
+                        totalStockQty.toStringAsFixed(0),
+                        Icons.inventory_2_rounded,
+                        Colors.blue,
+                        subtitle: 'Units on hand',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryMetricCard(
+                        'Low Stock Alerts',
+                        lowStockCount.toString(),
+                        Icons.warning_amber_rounded,
+                        Colors.orange.shade800,
+                        subtitle: 'Below threshold',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryMetricCard(
+                        'Out of Stock',
+                        outOfStockCount.toString(),
+                        Icons.cancel_outlined,
+                        Colors.red,
+                        subtitle: 'Needs replenishment',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(
+                child: _buildSummaryMetricCard(
+                  'Total Inventory Valuation',
+                  '₹${totalValuation.toStringAsFixed(2)}',
+                  Icons.account_balance_wallet_rounded,
+                  AppColors.primary,
+                  subtitle: 'Weighted Avg Cost (WAC)',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildSummaryMetricCard(
+                  'Total Stock Quantity',
+                  totalStockQty.toStringAsFixed(0),
+                  Icons.inventory_2_rounded,
+                  Colors.blue,
+                  subtitle: 'Units on hand',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildSummaryMetricCard(
+                  'Low Stock Alerts',
+                  lowStockCount.toString(),
+                  Icons.warning_amber_rounded,
+                  Colors.orange.shade800,
+                  subtitle: 'Below threshold',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildSummaryMetricCard(
+                  'Out of Stock',
+                  outOfStockCount.toString(),
+                  Icons.cancel_outlined,
+                  Colors.red,
+                  subtitle: 'Needs replenishment',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSummaryMetricCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color, {
+    String? subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.label,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ==========================================
@@ -795,6 +1461,8 @@ class _InventoryScreenState extends State<InventoryScreen>
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
+          // Inventory Valuation & Summary Header
+          _buildValuationSummary(),
           // Filters & Search Bar
           Row(
             children: [
@@ -849,6 +1517,12 @@ class _InventoryScreenState extends State<InventoryScreen>
                     _loadProducts();
                   }
                 },
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () => _showStockAdjustmentDialog(),
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('Adjust Stock'),
               ),
             ],
           ),
@@ -1028,12 +1702,19 @@ class _InventoryScreenState extends State<InventoryScreen>
                                         onSelected: (val) {
                                           if (val == 'view') {
                                             _showProductDetailsModal(p);
+                                          } else if (val == 'adjust') {
+                                            _showStockAdjustmentDialog(preselectedProduct: p);
+                                          } else if (val == 'movements') {
+                                            _showStockMovementsModal(p);
                                           } else if (val == 'edit') {
                                             _showProductFormDialog(product: p);
                                           } else if (val == 'archive') {
                                             MasterDataService.instance
                                                 .toggleArchiveProduct(p.id)
-                                                .then((_) => _loadProducts());
+                                                .then((_) {
+                                              _loadProducts();
+                                              _loadSummary();
+                                            });
                                           } else if (val == 'delete') {
                                             _handleDeleteProduct(p);
                                           }
@@ -1042,6 +1723,14 @@ class _InventoryScreenState extends State<InventoryScreen>
                                           const PopupMenuItem(
                                             value: 'view',
                                             child: Text('View Details'),
+                                          ),
+                                          const PopupMenuItem(
+                                            value: 'adjust',
+                                            child: Text('Adjust Stock'),
+                                          ),
+                                          const PopupMenuItem(
+                                            value: 'movements',
+                                            child: Text('Stock Movements'),
                                           ),
                                           const PopupMenuItem(
                                             value: 'edit',
@@ -1062,7 +1751,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                                           ),
                                         ],
                                       ),
-                                    ],
+                                      ],
                                   ),
                                   onTap: () => _showProductDetailsModal(p),
                                 ),

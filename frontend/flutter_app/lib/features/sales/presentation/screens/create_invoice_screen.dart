@@ -231,6 +231,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               Expanded(
                                 flex: 2,
                                 child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
                                   value: _selectedCustomerId,
                                   decoration: const InputDecoration(
                                     labelText: 'Customer',
@@ -239,11 +240,17 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                   items: [
                                     const DropdownMenuItem(
                                       value: null,
-                                      child: Text('Walk-in Customer (Cash Sale)'),
+                                      child: Text(
+                                        'Walk-in Customer (Cash Sale)',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                     ..._customers.map((c) => DropdownMenuItem(
                                           value: c.id,
-                                          child: Text('${c.name} (Bal: ₹${c.currentBalance.toStringAsFixed(0)})'),
+                                          child: Text(
+                                            '${c.name} (Bal: ₹${c.currentBalance.toStringAsFixed(0)})',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         )),
                                   ],
                                   onChanged: (val) {
@@ -262,13 +269,17 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               const SizedBox(width: 16),
                               Expanded(
                                 child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
                                   value: _placeOfSupply,
                                   decoration: const InputDecoration(
                                     labelText: 'Place of Supply',
                                     prefixIcon: Icon(Icons.location_on_outlined),
                                   ),
                                   items: _indianStates.entries
-                                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                                      .map((e) => DropdownMenuItem(
+                                            value: e.key,
+                                            child: Text(e.value, overflow: TextOverflow.ellipsis),
+                                          ))
                                       .toList(),
                                   onChanged: (val) {
                                     if (val != null) setState(() => _placeOfSupply = val);
@@ -385,6 +396,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                       Expanded(
                                         flex: 2,
                                         child: DropdownButtonFormField<String>(
+                                          isExpanded: true,
                                           value: item.productId,
                                           decoration: const InputDecoration(
                                             labelText: 'Select Product',
@@ -481,6 +493,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: DropdownButtonFormField<double>(
+                                          isExpanded: true,
                                           value: item.gstRate,
                                           decoration: const InputDecoration(
                                             labelText: 'GST Rate',
@@ -677,3 +690,4 @@ extension _LineItemDraftExt on _LineItemDraft {
         'gstRate': gstRate,
       };
 }
+
