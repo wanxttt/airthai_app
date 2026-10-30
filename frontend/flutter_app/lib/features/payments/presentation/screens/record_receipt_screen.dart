@@ -261,7 +261,7 @@ class _RecordReceiptScreenState extends State<RecordReceiptScreen> {
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
                               isExpanded: true,
-                              value: _selectedCustomerId,
+                              initialValue: _selectedCustomerId,
                               decoration: const InputDecoration(
                                 labelText: 'Select Customer *',
                                 prefixIcon: Icon(Icons.person_rounded),
@@ -326,7 +326,7 @@ class _RecordReceiptScreenState extends State<RecordReceiptScreen> {
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
                                     isExpanded: true,
-                                    value: _paymentMethod,
+                                    initialValue: _paymentMethod,
                                     decoration: const InputDecoration(
                                       labelText: 'Payment Method *',
                                       prefixIcon: Icon(Icons.payment_rounded),

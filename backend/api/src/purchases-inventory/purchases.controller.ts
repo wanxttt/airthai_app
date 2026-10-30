@@ -20,7 +20,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { QueryPurchasesDto } from './dto/query-purchases.dto';
 import { CancelPurchaseDto } from './dto/cancel-purchase.dto';
 
-@Controller('api/v1/purchases')
+@Controller('purchases')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}

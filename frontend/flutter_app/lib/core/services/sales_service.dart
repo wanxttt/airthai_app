@@ -1,6 +1,12 @@
 import '../constants/api_constants.dart';
+import '../database/database_manager.dart';
+import '../database/database_tables.dart';
 import '../network/api_client.dart';
+import '../network/connectivity_service.dart';
 import '../security/session_manager.dart';
+import '../sync/sync_operation.dart';
+import '../sync/sync_queue.dart';
+import '../utils/uuid.dart';
 import '../../features/sales/models/sales_models.dart';
 
 import '../network/service_result.dart';
@@ -129,7 +135,6 @@ class SalesService {
     ),
   ];
 
-  int _nextInvoiceSeq = 3;
   int _nextQuoSeq = 2;
 
   // -------------------------------------------------------------
@@ -223,8 +228,10 @@ class SalesService {
 
   Future<ServiceResult<InvoiceModel>> createInvoice(Map<String, dynamic> data) async {
     final mode = SessionManager.instance.authMode;
+    final clientOpId = data['clientOperationId']?.toString() ?? UuidUtils.generate();
+    data['clientOperationId'] = clientOpId;
 
-    if (mode == AuthMode.restBackend) {
+    if (mode == AuthMode.restBackend && ConnectivityService.instance.isOnline) {
       final response = await ApiClient.instance.post(
         ApiConstants.invoices,
         body: data,
@@ -234,16 +241,16 @@ class SalesService {
         final invoice = InvoiceModel.fromJson(response.data!['data'] as Map<String, dynamic>);
         return ServiceResult(success: true, data: invoice, statusCode: response.statusCode);
       }
-      return ServiceResult(
-        success: false,
-        errorMessage: response.errorMessage ?? 'Failed to create invoice',
-        statusCode: response.statusCode,
-      );
+      if (response.statusCode != 0 && response.statusCode != 503) {
+        return ServiceResult(
+          success: false,
+          errorMessage: response.errorMessage ?? 'Failed to create invoice',
+          statusCode: response.statusCode,
+        );
+      }
     }
 
-    // Mock implementation
-    await Future.delayed(const Duration(milliseconds: 200));
-
+    // Offline / Local Processing
     final itemsRaw = (data['items'] as List<dynamic>?) ?? [];
     if (itemsRaw.isEmpty) {
       return const ServiceResult(success: false, errorMessage: 'At least one line item is required.');
@@ -312,18 +319,99 @@ class SalesService {
     final roundedTotal = rawTotal.roundToDouble();
     final roundOff = roundedTotal - rawTotal;
 
-    final seqStr = _nextInvoiceSeq.toString().padLeft(4, '0');
-    _nextInvoiceSeq++;
+    // Temporary non-authoritative offline sequence number
+    final hexSuffix = DateTime.now().millisecondsSinceEpoch.toRadixString(16).substring(4).toUpperCase();
+    final offlineInvNumber = 'OFFLINE-INV-$hexSuffix';
+    final localId = 'inv_local_${DateTime.now().millisecondsSinceEpoch}';
+    final businessId = SessionManager.instance.currentUser?.businessId ?? 'default_biz';
+
+    final invoiceDate = data['invoiceDate'] != null
+        ? DateTime.tryParse(data['invoiceDate'].toString()) ?? DateTime.now()
+        : DateTime.now();
+    final dueDate = data['dueDate'] != null
+        ? DateTime.tryParse(data['dueDate'].toString())
+        : null;
+
+    // Atomic storage: local record + pending sync queue operation
+    final db = await DatabaseManager.instance.database;
+    await db.transaction((txn) async {
+      await txn.insert('local_invoices', {
+        'id': localId,
+        'business_id': businessId,
+        'branch_id': 'branch_main',
+        'customer_id': data['customerId']?.toString(),
+        'invoice_number': offlineInvNumber,
+        'invoice_date': invoiceDate.toIso8601String(),
+        'due_date': dueDate?.toIso8601String(),
+        'status': 'ISSUED',
+        'bill_format': 'A4_STANDARD',
+        'place_of_supply': placeOfSupply,
+        'is_inter_state': isInterState ? 1 : 0,
+        'is_reverse_charge': 0,
+        'subtotal': subtotal,
+        'discount_amount': invDiscount,
+        'taxable_amount': taxable - invDiscount,
+        'cgst_amount': cgst,
+        'sgst_amount': sgst,
+        'igst_amount': igst,
+        'round_off': roundOff,
+        'total_amount': roundedTotal,
+        'received_amount': 0.0,
+        'balance_amount': roundedTotal,
+        'notes': data['notes']?.toString(),
+        'terms': data['terms']?.toString(),
+        'client_operation_id': clientOpId,
+        'sync_status': SyncStatus.pendingInsert.code,
+        'server_version': 1,
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      for (final item in parsedItems) {
+        await txn.insert('local_invoice_items', {
+          'id': item.id,
+          'business_id': businessId,
+          'invoice_id': localId,
+          'product_id': item.productId,
+          'description': item.description,
+          'quantity': item.quantity,
+          'unit_price': item.unitPrice,
+          'discount_amount': item.discountAmount,
+          'taxable_amount': item.taxableAmount,
+          'gst_rate': item.gstRate,
+          'cgst_amount': item.cgstAmount,
+          'sgst_amount': item.sgstAmount,
+          'igst_amount': item.igstAmount,
+          'total_amount': item.totalAmount,
+          'sync_status': SyncStatus.pendingInsert.code,
+          'client_operation_id': clientOpId,
+        });
+      }
+
+      final syncOp = SyncOperation(
+        id: 'sync_op_${DateTime.now().millisecondsSinceEpoch}',
+        clientOperationId: clientOpId,
+        businessId: businessId,
+        entityType: 'INVOICE',
+        entityId: localId,
+        operation: 'CREATE',
+        payload: {
+          ...data,
+          'invoiceNumber': offlineInvNumber,
+          'clientOperationId': clientOpId,
+        },
+        status: 'PENDING',
+        createdAt: DateTime.now(),
+      );
+
+      await SyncQueue.instance.enqueue(syncOp, txn: txn);
+    });
 
     final newInvoice = InvoiceModel(
-      id: 'inv_mock_${DateTime.now().millisecondsSinceEpoch}',
-      invoiceNumber: 'INV-2026-27-$seqStr',
-      invoiceDate: data['invoiceDate'] != null
-          ? DateTime.tryParse(data['invoiceDate'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      dueDate: data['dueDate'] != null
-          ? DateTime.tryParse(data['dueDate'].toString())
-          : null,
+      id: localId,
+      invoiceNumber: offlineInvNumber,
+      invoiceDate: invoiceDate,
+      dueDate: dueDate,
       status: 'ISSUED',
       customerId: data['customerId']?.toString(),
       customerName: data['customerName']?.toString() ?? 'Walk-in Customer',

@@ -17,11 +17,20 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
+    const request = context.switchToHttp().getRequest();
+    const method = request.method;
+
     if (!requiredRoles || requiredRoles.length === 0) {
+      // Fail closed: Mutating operations MUST have an explicit role policy defined
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        throw new ForbiddenException(
+          `Access denied: Mutating route ${method} ${request.url} requires an explicit role policy.`,
+        );
+      }
+      // Read-only queries without an explicit role policy are accessible to any authenticated tenant member
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
     const user = request.user;
 
     if (!user || !user.role) {

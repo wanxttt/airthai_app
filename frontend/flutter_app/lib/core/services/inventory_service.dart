@@ -93,6 +93,9 @@ class InventoryService {
     ],
   };
 
+  /// Alias for [getSummary] for semantic consistency across inventory and reporting callers.
+  Future<ServiceResult<InventorySummaryModel>> getStockSummary() => getSummary();
+
   Future<ServiceResult<InventorySummaryModel>> getSummary() async {
     final mode = SessionManager.instance.authMode;
 

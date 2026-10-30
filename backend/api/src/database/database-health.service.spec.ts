@@ -4,11 +4,11 @@ import { PrismaService } from './prisma.service';
 
 describe('DatabaseHealthService', () => {
   let service: DatabaseHealthService;
-  let mockPrismaService: { $queryRawUnsafe: jest.Mock };
+  let mockPrismaService: { $queryRaw: jest.Mock };
 
   beforeEach(async () => {
     mockPrismaService = {
-      $queryRawUnsafe: jest.fn(),
+      $queryRaw: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -29,7 +29,7 @@ describe('DatabaseHealthService', () => {
   });
 
   it('should return status up and measure latency on successful query', async () => {
-    mockPrismaService.$queryRawUnsafe.mockResolvedValueOnce([{ test: 1 }]);
+    mockPrismaService.$queryRaw.mockResolvedValueOnce([{ test: 1 }]);
 
     const result = await service.checkHealth();
 
@@ -37,11 +37,11 @@ describe('DatabaseHealthService', () => {
     expect(typeof result.latencyMs).toBe('number');
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     expect(result.timestamp).toBeDefined();
-    expect(mockPrismaService.$queryRawUnsafe).toHaveBeenCalledWith('SELECT 1');
+    expect(mockPrismaService.$queryRaw).toHaveBeenCalled();
   });
 
   it('should return status down and safe error message on query failure', async () => {
-    mockPrismaService.$queryRawUnsafe.mockRejectedValueOnce(new Error('Connection refused'));
+    mockPrismaService.$queryRaw.mockRejectedValueOnce(new Error('Connection refused'));
 
     const result = await service.checkHealth();
 

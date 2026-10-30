@@ -17,7 +17,7 @@ import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-us
 import { QuotationsService } from './quotations.service';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 
-@Controller('api/v1/quotations')
+@Controller('quotations')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}

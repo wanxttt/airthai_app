@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/landing/presentation/screens/landing_screen.dart';
+import '../../features/legal/presentation/screens/privacy_policy_screen.dart';
+import '../../features/legal/presentation/screens/terms_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/splash/presentation/screens/splash_screen.dart';
 import '../../shared/widgets/app_shell.dart';
@@ -26,6 +29,12 @@ class AppRouter {
           settings: settings,
         );
 
+      case RouteNames.landing:
+        return MaterialPageRoute(
+          builder: (_) => const LandingScreen(),
+          settings: settings,
+        );
+
       case RouteNames.onboarding:
         return MaterialPageRoute(
           builder: (_) => const OnboardingScreen(),
@@ -41,6 +50,18 @@ class AppRouter {
       case RouteNames.register:
         return MaterialPageRoute(
           builder: (_) => const RegisterScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.privacy:
+        return MaterialPageRoute(
+          builder: (_) => const PrivacyPolicyScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.terms:
+        return MaterialPageRoute(
+          builder: (_) => const TermsScreen(),
           settings: settings,
         );
 

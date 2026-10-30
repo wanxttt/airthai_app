@@ -4,7 +4,7 @@ import '../../../../core/services/sales_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../master_data/models/master_data_models.dart';
-import '../../models/sales_models.dart';
+
 import 'invoice_detail_screen.dart';
 
 class CreateInvoiceScreen extends StatefulWidget {
@@ -22,16 +22,16 @@ class _LineItemDraft {
   String? hsnCode;
   double quantity;
   double unitPrice;
-  double discountAmount;
+  double discountAmount = 0.0;
   double gstRate;
 
   _LineItemDraft({
-    this.productId,
+
     this.description = '',
-    this.hsnCode,
+
     this.quantity = 1.0,
     this.unitPrice = 0.0,
-    this.discountAmount = 0.0,
+
     this.gstRate = 18.0,
   });
 
@@ -232,7 +232,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                 flex: 2,
                                 child: DropdownButtonFormField<String>(
                                   isExpanded: true,
-                                  value: _selectedCustomerId,
+                                  initialValue: _selectedCustomerId,
                                   decoration: const InputDecoration(
                                     labelText: 'Customer',
                                     prefixIcon: Icon(Icons.person_outline_rounded),
@@ -270,7 +270,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               Expanded(
                                 child: DropdownButtonFormField<String>(
                                   isExpanded: true,
-                                  value: _placeOfSupply,
+                                  initialValue: _placeOfSupply,
                                   decoration: const InputDecoration(
                                     labelText: 'Place of Supply',
                                     prefixIcon: Icon(Icons.location_on_outlined),
@@ -397,7 +397,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                         flex: 2,
                                         child: DropdownButtonFormField<String>(
                                           isExpanded: true,
-                                          value: item.productId,
+                                          initialValue: item.productId,
                                           decoration: const InputDecoration(
                                             labelText: 'Select Product',
                                             isDense: true,
@@ -494,7 +494,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                       Expanded(
                                         child: DropdownButtonFormField<double>(
                                           isExpanded: true,
-                                          value: item.gstRate,
+                                          initialValue: item.gstRate,
                                           decoration: const InputDecoration(
                                             labelText: 'GST Rate',
                                             isDense: true,

@@ -7,6 +7,7 @@ class ApiResponse<T> {
   final T? data;
   final String? message;
   final Map<String, dynamic>? errors;
+  final String? requestId;
 
   String? get errorMessage => message;
 
@@ -16,18 +17,21 @@ class ApiResponse<T> {
     this.data,
     this.message,
     this.errors,
+    this.requestId,
   });
 
   factory ApiResponse.success({
     required int statusCode,
     T? data,
     String? message,
+    String? requestId,
   }) {
     return ApiResponse<T>(
       statusCode: statusCode,
       isSuccess: true,
       data: data,
       message: message,
+      requestId: requestId,
     );
   }
 
@@ -36,6 +40,7 @@ class ApiResponse<T> {
     String? message,
     Map<String, dynamic>? errors,
     T? data,
+    String? requestId,
   }) {
     return ApiResponse<T>(
       statusCode: statusCode,
@@ -43,12 +48,12 @@ class ApiResponse<T> {
       data: data,
       message: message,
       errors: errors,
+      requestId: requestId,
     );
   }
 
   @override
   String toString() {
-    return 'ApiResponse(status: $statusCode, success: $isSuccess, message: $message, data: $data)';
+    return 'ApiResponse(status: $statusCode, success: $isSuccess, message: $message, requestId: $requestId, data: $data)';
   }
 }
-

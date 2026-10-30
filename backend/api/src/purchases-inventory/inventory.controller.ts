@@ -18,7 +18,7 @@ import { InventoryService } from './inventory.service';
 import { CreateStockAdjustmentDto } from './dto/stock-adjustment.dto';
 import { QueryInventoryDto } from './dto/query-inventory.dto';
 
-@Controller('api/v1/inventory')
+@Controller('inventory')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}

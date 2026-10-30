@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/network/service_result.dart';
 import '../../core/security/session_manager.dart';
+import '../../core/services/notification_service.dart';
+import '../../core/sync/sync_manager.dart';
+import '../../core/sync/sync_status.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../features/notifications/models/notification_model.dart';
 import '../../features/auth/presentation/screens/business_setup_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/customers/presentation/screens/customers_screen.dart';
@@ -13,7 +18,11 @@ import '../../features/sales/presentation/screens/sales_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_screen.dart';
 import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/expenses/presentation/screens/expenses_screen.dart';
-import '../../features/accounting/presentation/screens/accounting_screen.dart';
+import '../../features/reports/presentation/screens/dashboard_screen.dart';
+import '../../features/reports/presentation/screens/reports_screen.dart';
+import '../../features/copilot/presentation/widgets/copilot_dialog.dart';
+import '../../features/legal/presentation/screens/privacy_policy_screen.dart';
+import '../../features/legal/presentation/screens/terms_screen.dart';
 
 class AppShell extends StatefulWidget {
   final bool showBusinessOnboarding;
@@ -231,15 +240,36 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isCompact = screenWidth < 900;
+
+    if (isCompact) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        drawer: Drawer(
+          backgroundColor: AppColors.surface,
+          child: SafeArea(
+            child: _buildSidebar(isDrawer: true),
+          ),
+        ),
+        body: Column(
+          children: [
+            _buildTopBar(isCompact: true),
+            Expanded(child: _buildContent()),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Row(
         children: [
-          _buildSidebar(),
+          _buildSidebar(isDrawer: false),
           Expanded(
             child: Column(
               children: [
-                _buildTopBar(),
+                _buildTopBar(isCompact: false),
                 Expanded(child: _buildContent()),
               ],
             ),
@@ -249,16 +279,18 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildSidebar() {
+  Widget _buildSidebar({bool isDrawer = false}) {
     return Container(
-      width: AppDimensions.sidebarWidth,
-      decoration: const BoxDecoration(
+      width: isDrawer ? null : AppDimensions.sidebarWidth,
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
+        border: isDrawer
+            ? null
+            : const Border(right: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         children: [
-          _buildBrand(),
+          _buildBrand(isDrawer: isDrawer),
           const SizedBox(height: 24),
 
           Expanded(
@@ -272,8 +304,11 @@ class _AppShellState extends State<AppShell> {
 
                 ...List.generate(
                   navigationItems.length,
-                  (index) =>
-                      _buildNavigationItem(index, navigationItems[index]),
+                  (index) => _buildNavigationItem(
+                    index,
+                    navigationItems[index],
+                    isDrawer: isDrawer,
+                  ),
                 ),
               ],
             ),
@@ -285,7 +320,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildBrand() {
+  Widget _buildBrand({bool isDrawer = false}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Row(
@@ -304,20 +339,31 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
           const SizedBox(width: 12),
-          const Text(
-            'AirthAI',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+          const Expanded(
+            child: Text(
+              'AirthAI',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
+          if (isDrawer)
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildNavigationItem(int index, _NavigationItem item) {
+  Widget _buildNavigationItem(
+    int index,
+    _NavigationItem item, {
+    bool isDrawer = false,
+  }) {
     final selected = selectedIndex == index;
 
     return Padding(
@@ -330,6 +376,9 @@ class _AppShellState extends State<AppShell> {
             setState(() {
               selectedIndex = index;
             });
+            if (isDrawer) {
+              Navigator.pop(context);
+            }
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
@@ -377,7 +426,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar({bool isCompact = false}) {
     final user = SessionManager.instance.currentUser;
     final initial = (user != null && user.fullName.isNotEmpty)
         ? user.fullName[0].toUpperCase()
@@ -385,13 +434,24 @@ class _AppShellState extends State<AppShell> {
 
     return Container(
       height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 28),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
+          if (isCompact) ...[
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.menu_rounded, color: AppColors.textPrimary),
+                tooltip: 'Open navigation menu',
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+
           Expanded(
             child: Text(
               navigationItems[selectedIndex].label,
@@ -400,19 +460,15 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
 
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              size: 21,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          _buildSyncIndicator(),
+
+          const SizedBox(width: 10),
+
+          _buildCopilotButton(),
+
+          const SizedBox(width: 10),
+
+          _buildNotificationButton(),
 
           const SizedBox(width: 12),
 
@@ -425,6 +481,16 @@ class _AppShellState extends State<AppShell> {
             onSelected: (value) {
               if (value == 'logout') {
                 _handleLogout();
+              } else if (value == 'privacy') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                );
+              } else if (value == 'terms') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TermsScreen()),
+                );
               }
             },
             itemBuilder: (context) => [
@@ -447,6 +513,27 @@ class _AppShellState extends State<AppShell> {
                         color: AppColors.textSecondary,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'privacy',
+                child: Row(
+                  children: [
+                    Icon(Icons.shield_outlined, size: 18, color: AppColors.textSecondary),
+                    SizedBox(width: 8),
+                    Text('Privacy Policy'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'terms',
+                child: Row(
+                  children: [
+                    Icon(Icons.gavel_outlined, size: 18, color: AppColors.textSecondary),
+                    SizedBox(width: 8),
+                    Text('Terms of Service'),
                   ],
                 ),
               ),
@@ -490,6 +577,10 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildContent() {
     switch (selectedIndex) {
+      case 0:
+        return DashboardScreen(
+          onNavigateToTab: (index) => setState(() => selectedIndex = index),
+        );
       case 1:
         return const SalesScreen();
       case 2:
@@ -505,13 +596,10 @@ class _AppShellState extends State<AppShell> {
       case 7:
         return const ExpensesScreen();
       case 8:
-        return const AccountingScreen();
+        return const ReportsScreen();
       default:
-        return Center(
-          child: Text(
-            '${navigationItems[selectedIndex].label} Screen',
-            style: AppTextStyles.headingLarge,
-          ),
+        return DashboardScreen(
+          onNavigateToTab: (index) => setState(() => selectedIndex = index),
         );
     }
   }
@@ -588,6 +676,288 @@ class _AppShellState extends State<AppShell> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSyncIndicator() {
+    return ValueListenableBuilder<SyncStatusInfo>(
+      valueListenable: SyncManager.instance.statusNotifier,
+      builder: (context, status, _) {
+        Color bgColor;
+        Color textColor;
+        IconData iconData;
+        String text;
+
+        if (status.isSyncing) {
+          bgColor = const Color(0xFFEFF6FF);
+          textColor = const Color(0xFF2563EB);
+          iconData = Icons.sync_rounded;
+          text = 'Syncing...';
+        } else if (!status.isOnline) {
+          bgColor = const Color(0xFFFEF3C7);
+          textColor = const Color(0xFFD97706);
+          iconData = Icons.cloud_off_rounded;
+          text = status.pendingCount > 0 ? 'Offline (${status.pendingCount})' : 'Offline';
+        } else if (status.hasIssues) {
+          bgColor = const Color(0xFFFEE2E2);
+          textColor = const Color(0xFFDC2626);
+          iconData = Icons.sync_problem_rounded;
+          text = '${status.failedCount} Failed';
+        } else if (status.pendingCount > 0) {
+          bgColor = const Color(0xFFFEF3C7);
+          textColor = const Color(0xFFD97706);
+          iconData = Icons.cloud_upload_outlined;
+          text = '${status.pendingCount} Pending';
+        } else {
+          bgColor = const Color(0xFFECFDF5);
+          textColor = const Color(0xFF059669);
+          iconData = Icons.cloud_done_rounded;
+          text = 'Synced';
+        }
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () async {
+            final res = await SyncManager.instance.syncNow();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(res.success
+                      ? (res.syncedCount > 0
+                          ? 'Synced ${res.syncedCount} item(s)'
+                          : 'All changes up to date')
+                      : (res.errorMessage ?? 'Sync completed with issues')),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: textColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(iconData, size: 16, color: textColor),
+                const SizedBox(width: 6),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationButton() {
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationService.instance.unreadCountNotifier,
+      builder: (context, unreadCount, _) {
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _showNotificationsDialog(context),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Icon(
+                  Icons.notifications_none_rounded,
+                  size: 21,
+                  color: AppColors.textSecondary,
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFDC2626),
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 8,
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCopilotButton() {
+    return Tooltip(
+      message: 'AI Business Copilot',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (ctx) => const CopilotDialog(),
+          );
+        },
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 20,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480, maxHeight: 600),
+            child: FutureBuilder<ServiceResult<List<NotificationModel>>>(
+              future: NotificationService.instance.getNotifications(),
+              builder: (context, snapshot) {
+                final notifs = snapshot.data?.data ?? [];
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Notifications',
+                              style: AppTextStyles.title,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () async {
+                              await NotificationService.instance.markAllAsRead();
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                              }
+                            },
+                            child: const Text('Mark all read', style: TextStyle(fontSize: 12)),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    if (snapshot.connectionState == ConnectionState.waiting)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (notifs.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(
+                          child: Text('No notifications yet', style: TextStyle(color: AppColors.textSecondary)),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shrinkWrap: true,
+                          itemCount: notifs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, idx) {
+                            final n = notifs[idx];
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: n.color.withValues(alpha: 0.15),
+                                child: Icon(n.icon, size: 20, color: n.color),
+                              ),
+                              title: Text(
+                                n.title,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: n.isRead ? FontWeight.w500 : FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  n.message,
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                              ),
+                              trailing: n.isRead
+                                  ? null
+                                  : Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF2563EB),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                              onTap: () async {
+                                if (!n.isRead) {
+                                  await NotificationService.instance.markAsRead(n.id);
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx);
+                                  }
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }

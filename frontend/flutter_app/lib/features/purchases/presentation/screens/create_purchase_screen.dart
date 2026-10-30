@@ -4,7 +4,7 @@ import '../../../../core/services/purchase_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../master_data/models/master_data_models.dart';
-import '../../models/purchase_models.dart';
+
 import 'purchase_detail_screen.dart';
 
 class CreatePurchaseScreen extends StatefulWidget {
@@ -20,7 +20,7 @@ class _PurchaseLineItemDraft {
   String productId;
   String description;
   String? hsnCode;
-  double quantity;
+  double quantity = 1.0;
   double unitCost;
   double taxRate;
 
@@ -28,7 +28,7 @@ class _PurchaseLineItemDraft {
     required this.productId,
     this.description = '',
     this.hsnCode,
-    this.quantity = 1.0,
+    // quantity initialized below
     this.unitCost = 0.0,
     this.taxRate = 18.0,
   });
@@ -214,7 +214,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                 flex: 2,
                                 child: DropdownButtonFormField<String>(
                                   isExpanded: true,
-                                  value: _selectedSupplierId,
+                                  initialValue: _selectedSupplierId,
                                   decoration: const InputDecoration(
                                     labelText: 'Supplier *',
                                     prefixIcon: Icon(Icons.local_shipping_outlined),
@@ -274,7 +274,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                               Expanded(
                                 child: DropdownButtonFormField<String>(
                                   isExpanded: true,
-                                  value: _status,
+                                  initialValue: _status,
                                   decoration: const InputDecoration(
                                     labelText: 'Purchase State',
                                     prefixIcon: Icon(Icons.inventory_rounded),
@@ -369,7 +369,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                         flex: 2,
                                         child: DropdownButtonFormField<String>(
                                           isExpanded: true,
-                                          value: item.productId,
+                                          initialValue: item.productId,
                                           decoration: const InputDecoration(
                                             labelText: 'Product *',
                                             isDense: true,
@@ -438,7 +438,7 @@ class _CreatePurchaseScreenState extends State<CreatePurchaseScreen> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: DropdownButtonFormField<double>(
-                                          value: item.taxRate,
+                                          initialValue: item.taxRate,
                                           decoration: const InputDecoration(labelText: 'Tax Rate', isDense: true),
                                           items: const [
                                             DropdownMenuItem(value: 0.0, child: Text('0% (Exempt)')),

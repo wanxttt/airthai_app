@@ -10,22 +10,29 @@ import { RateLimitGuard } from './guards/rate-limit.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { TenantGuard } from './guards/tenant.guard';
 import { DatabaseModule } from '../database/database.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
     DatabaseModule,
+    SubscriptionsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret:
-          configService.get<string>('JWT_SECRET') ||
-          'replace_with_a_secure_random_64_char_secret_for_production',
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '3600s',
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        const isProd = configService.get<string>('NODE_ENV') === 'production';
+        if (isProd && (!secret || secret === 'replace_with_a_secure_random_64_char_secret_for_production')) {
+          throw new Error('FATAL CONFIGURATION ERROR: JWT_SECRET must be configured with a secure key in production.');
+        }
+        return {
+          secret: secret || 'replace_with_a_secure_random_64_char_secret_for_production',
+          signOptions: {
+            expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '3600s',
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
@@ -48,4 +55,3 @@ import { DatabaseModule } from '../database/database.module';
   ],
 })
 export class AuthModule {}
-

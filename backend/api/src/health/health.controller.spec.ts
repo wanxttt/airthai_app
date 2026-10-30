@@ -95,5 +95,13 @@ describe('HealthController', () => {
       );
     });
   });
+
+  describe('getMetrics', () => {
+    it('should return metrics snapshot with uptime and timestamp', () => {
+      const metrics = controller.getMetrics();
+      expect(metrics).toHaveProperty('service', 'airthai-backend-api');
+      expect(metrics).toHaveProperty('uptime');
+    });
+  });
 });
 

@@ -219,7 +219,7 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
                                   flex: 3,
                                   child: DropdownButtonFormField<String>(
                                     isExpanded: true,
-                                    value: _selectedCategoryId,
+                                    initialValue: _selectedCategoryId,
                                     decoration: const InputDecoration(
                                       labelText: 'Category *',
                                       prefixIcon: Icon(Icons.category_rounded),
@@ -266,7 +266,7 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
                                     isExpanded: true,
-                                    value: _paymentMethod,
+                                    initialValue: _paymentMethod,
                                     decoration: const InputDecoration(
                                       labelText: 'Payment Method *',
                                       prefixIcon: Icon(Icons.payment_rounded),

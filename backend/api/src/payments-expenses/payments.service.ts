@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
+import { CacheService } from '../common/cache/cache.service';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../sales/sequence.service';
 import { CreatePaymentDto, VoidPaymentDto } from './dto/create-payment.dto';
@@ -21,6 +22,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService,
     @Optional() private readonly accountingService?: AccountingService,
+    @Optional() private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -59,7 +61,7 @@ export class PaymentsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Verify Customer
       const customer = await tx.customer.findUnique({
         where: { businessId_id: { businessId, id: dto.customerId! } },
@@ -164,6 +166,11 @@ export class PaymentsService {
           },
         });
 
+        // SEC-AI-10: Concurrency guard - exclusive lock on invoice row
+        if (typeof (tx as any).$executeRaw === 'function') {
+          await (tx as any).$executeRaw`SELECT 1 FROM "invoices" WHERE "businessId" = ${businessId} AND "id" = ${alloc.invoiceId} FOR UPDATE`;
+        }
+
         const currentInv = await tx.invoice.findUnique({
           where: { businessId_id: { businessId, id: alloc.invoiceId } },
         });
@@ -172,6 +179,33 @@ export class PaymentsService {
           const newReceived = currentInv.receivedAmount.plus(alloc.amount);
           const newBalance = currentInv.balanceAmount.minus(alloc.amount);
           const newStatus = newBalance.isZero() ? 'PAID' : 'PARTIALLY_PAID';
+
+          if (currentInv.balanceAmount.lt(alloc.amount)) {
+            throw new ConflictException(
+              `Failed to allocate payment: invoice balance changed concurrently or allocation exceeds outstanding balance.`,
+            );
+          }
+
+          // Atomic conditional update enforcing floor check at database level
+          const updateResult = await tx.invoice.updateMany({
+            where: {
+              businessId,
+              id: alloc.invoiceId,
+              balanceAmount: { gte: alloc.amount },
+              status: { notIn: ['CANCELLED', 'DRAFT'] },
+            },
+            data: {
+              receivedAmount: newReceived,
+              balanceAmount: newBalance,
+              status: newStatus,
+            },
+          });
+
+          if (updateResult.count === 0) {
+            throw new ConflictException(
+              `Failed to allocate payment: invoice balance changed concurrently or allocation exceeds outstanding balance.`,
+            );
+          }
 
           await tx.invoice.update({
             where: { businessId_id: { businessId, id: alloc.invoiceId } },
@@ -228,6 +262,12 @@ export class PaymentsService {
         },
       });
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   /**
@@ -266,7 +306,7 @@ export class PaymentsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Verify Supplier
       const supplier = await tx.supplier.findUnique({
         where: { businessId_id: { businessId, id: dto.supplierId! } },
@@ -369,6 +409,11 @@ export class PaymentsService {
           },
         });
 
+        // SEC-AI-10: Concurrency guard - exclusive lock on purchase row
+        if (typeof (tx as any).$executeRaw === 'function') {
+          await (tx as any).$executeRaw`SELECT 1 FROM "purchases" WHERE "businessId" = ${businessId} AND "id" = ${alloc.purchaseId} FOR UPDATE`;
+        }
+
         const currentPur = await tx.purchase.findUnique({
           where: { businessId_id: { businessId, id: alloc.purchaseId } },
         });
@@ -377,6 +422,33 @@ export class PaymentsService {
           const newPaid = currentPur.paidAmount.plus(alloc.amount);
           const newBalance = currentPur.balanceAmount.minus(alloc.amount);
           const newPaymentStatus = newBalance.isZero() ? 'PAID' : 'PARTIALLY_PAID';
+
+          if (currentPur.balanceAmount.lt(alloc.amount)) {
+            throw new ConflictException(
+              `Failed to allocate payment: purchase bill balance changed concurrently or allocation exceeds outstanding balance.`,
+            );
+          }
+
+          // Atomic conditional update enforcing floor check at database level
+          const updateResult = await tx.purchase.updateMany({
+            where: {
+              businessId,
+              id: alloc.purchaseId,
+              balanceAmount: { gte: alloc.amount },
+              status: { not: 'CANCELLED' },
+            },
+            data: {
+              paidAmount: newPaid,
+              balanceAmount: newBalance,
+              paymentStatus: newPaymentStatus,
+            },
+          });
+
+          if (updateResult.count === 0) {
+            throw new ConflictException(
+              `Failed to allocate payment: purchase bill balance changed concurrently or allocation exceeds outstanding balance.`,
+            );
+          }
 
           await tx.purchase.update({
             where: { businessId_id: { businessId, id: alloc.purchaseId } },
@@ -433,6 +505,12 @@ export class PaymentsService {
         },
       });
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   /**
@@ -558,7 +636,7 @@ export class PaymentsService {
    * Restores invoice/bill balances and party outstanding balance.
    */
   async voidPayment(businessId: string, paymentId: string, dto: VoidPaymentDto, userId?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { businessId_id: { businessId, id: paymentId } },
         include: {
@@ -679,6 +757,12 @@ export class PaymentsService {
         message: `Payment ${payment.paymentNumber} voided and balances reversed successfully.`,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   /**

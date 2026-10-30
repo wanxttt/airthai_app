@@ -8,6 +8,8 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from './sequence.service';
 import { AccountingService } from '../accounting/accounting.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { CacheService } from '../common/cache/cache.service';
 import { TaxCalculatorUtil } from './utils/tax-calculator.util';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
@@ -20,6 +22,8 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService,
     @Optional() private readonly accountingService?: AccountingService,
+    @Optional() private readonly subscriptionsService?: SubscriptionsService,
+    @Optional() private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -145,6 +149,11 @@ export class InvoicesService {
       throw new BadRequestException('Invoice must contain at least one line item.');
     }
 
+    // 0. Subscription Quota Pre-Check (fail-fast before beginning transaction)
+    if (this.subscriptionsService) {
+      await this.subscriptionsService.enforceInvoiceLimit(businessId);
+    }
+
     // 1. Idempotency Check: if clientOperationId is present, check existing invoice
     if (dto.clientOperationId) {
       const existing = await this.prisma.invoice.findFirst({
@@ -169,7 +178,12 @@ export class InvoicesService {
     }
 
     // Run the entire creation process in a single atomic database transaction
-    return await this.prisma.$transaction(async (tx) => {
+    const createdResult = await this.prisma.$transaction(async (tx) => {
+      // 1b. Enforce subscription quota within transactional boundary
+      if (this.subscriptionsService) {
+        await this.subscriptionsService.enforceInvoiceLimit(businessId, tx);
+      }
+
       // 2. Validate Tenant & Business Settings
       const business = await tx.business.findUnique({
         where: { id: businessId },
@@ -245,6 +259,14 @@ export class InvoicesService {
         .map((item) => item.productId)
         .filter((id): id is string => Boolean(id));
 
+      // SEC-AI-11 Concurrency Guard: Lock product rows in deterministic order to prevent race conditions & deadlocks
+      const uniqueSortedProductIds = Array.from(new Set(productIds)).sort();
+      for (const pid of uniqueSortedProductIds) {
+        if (typeof (tx as any).$executeRaw === 'function') {
+          await (tx as any).$executeRaw`SELECT 1 FROM "products" WHERE "businessId" = ${businessId} AND "id" = ${pid} FOR UPDATE`;
+        }
+      }
+
       const products = productIds.length > 0
         ? await tx.product.findMany({
             where: {
@@ -276,6 +298,17 @@ export class InvoicesService {
       // Check stock availability if negative stock is disallowed
       const allowNegativeStock = business.settings?.allowNegativeStock ?? false;
       if (!allowNegativeStock) {
+        // Aggregate requested quantities per product to prevent intra-order stock bypass
+        const aggregatedRequestedQty = new Map<string, number>();
+        for (const item of dto.items) {
+          if (item.productId) {
+            aggregatedRequestedQty.set(
+              item.productId,
+              (aggregatedRequestedQty.get(item.productId) || 0) + item.quantity,
+            );
+          }
+        }
+
         for (const item of dto.items) {
           if (item.productId) {
             const product = productMap.get(item.productId);
@@ -290,9 +323,10 @@ export class InvoicesService {
                 }
               }, 0);
 
-              if (currentStock < item.quantity) {
+              const requestedQty = aggregatedRequestedQty.get(item.productId) || item.quantity;
+              if (currentStock < requestedQty) {
                 throw new BadRequestException(
-                  `Insufficient stock for product "${product.name}". Available stock: ${currentStock}, Requested: ${item.quantity}.`,
+                  `Insufficient stock for product "${product.name}". Available stock: ${currentStock}, Requested: ${requestedQty}.`,
                 );
               }
             }
@@ -458,6 +492,12 @@ export class InvoicesService {
         data: invoice,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return createdResult;
   }
 
   /**
@@ -481,7 +521,7 @@ export class InvoicesService {
       throw new BadRequestException('Invoice is already cancelled.');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    const createdResult = await this.prisma.$transaction(async (tx) => {
       // 1. Mark invoice as CANCELLED
       const cancelledInvoice = await tx.invoice.update({
         where: { businessId_id: { businessId, id } },
@@ -580,5 +620,11 @@ export class InvoicesService {
         data: cancelledInvoice,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return createdResult;
   }
 }

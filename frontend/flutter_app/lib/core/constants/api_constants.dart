@@ -65,6 +65,34 @@ class ApiConstants {
   static const String gstGstr3b = '/api/v1/gst/gstr-3b';
   static const String gstSummary = '/api/v1/gst/summary';
 
+  /// Dashboard & Reports endpoints
+  static const String dashboardMetrics = '/api/v1/dashboard/metrics';
+  static const String reportsSales = '/api/v1/reports/sales';
+  static const String reportsPurchases = '/api/v1/reports/purchases';
+  static const String reportsExpenses = '/api/v1/reports/expenses';
+  static const String reportsPayments = '/api/v1/reports/payments';
+  static const String reportsReceivablesAgeing = '/api/v1/reports/receivables-ageing';
+  static const String reportsPayablesAgeing = '/api/v1/reports/payables-ageing';
+  static const String reportsStockSummary = '/api/v1/reports/stock-summary';
+  static const String reportsStockMovements = '/api/v1/reports/stock-movements';
+  static const String reportsProductPerformance = '/api/v1/reports/product-performance';
+  static const String reportsGstSummary = '/api/v1/reports/gst-summary';
+
+  /// Audit, Notifications & Subscriptions endpoints
+  static const String notifications = '/api/v1/notifications';
+  static const String notificationsUnread = '/api/v1/notifications/unread-count';
+  static const String notificationsMarkAllRead = '/api/v1/notifications/mark-all-read';
+  static const String notificationsScan = '/api/v1/notifications/scan';
+  static const String auditLogs = '/api/v1/audit-logs';
+  static const String subscriptionsCurrent = '/api/v1/subscriptions/current';
+  static const String subscriptionsPlans = '/api/v1/subscriptions/plans';
+  static const String subscriptionsChangePlan = '/api/v1/subscriptions/change-plan';
+
+  /// AI Business Copilot endpoints
+  static const String copilotStatus = '/api/v1/copilot/status';
+  static const String copilotSuggestions = '/api/v1/copilot/suggestions';
+  static const String copilotQuery = '/api/v1/copilot/query';
+
   /// HTTP Headers
   static const String headerAuthorization = 'Authorization';
   static const String headerContentType = 'Content-Type';

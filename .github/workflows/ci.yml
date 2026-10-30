@@ -1,0 +1,119 @@
+name: AirthAI Continuous Integration (CI)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-ci:
+    name: Backend Tests & Build (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/api
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: airthai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/api/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: npm ci
+
+      - name: Validate Prisma Schema
+        run: npm run prisma:validate
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Execute Backend Test Suite
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/airthai_test?schema=public
+          DIRECT_DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/airthai_test?schema=public
+          JWT_SECRET: test_jwt_secret_key_must_be_at_least_32_characters_for_security
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_key_must_be_at_least_32_characters_long
+          RAZORPAY_KEY_ID: rzp_test_dummy_key_id_for_ci
+          RAZORPAY_KEY_SECRET: rzp_test_dummy_key_secret_for_ci
+          RAZORPAY_WEBHOOK_SECRET: rzp_test_dummy_webhook_secret_for_ci
+        run: npm test -- --runInBand
+
+      - name: Compile Backend Production Build
+        run: npm run build
+
+  frontend-ci:
+    name: Frontend Analysis, Tests & Web Build (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/flutter_app
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Run Flutter Static Analysis (lib)
+        run: flutter analyze lib
+
+      - name: Run Flutter Static Analysis (test)
+        run: flutter analyze test
+
+      - name: Execute Flutter Test Suite
+        run: flutter test
+
+      - name: Compile Flutter Web Release Build
+        run: flutter build web --release
+
+  security-scan:
+    name: Code & Dependency Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Backend npm Audit (Production Dependencies)
+        working-directory: backend/api
+        run: npm audit --omit=dev --audit-level=high || true
+

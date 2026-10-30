@@ -13,13 +13,14 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ExpensesService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { QueryExpensesDto } from './dto/query-expenses.dto';
 
-@Controller('api/v1/expenses')
+@Controller('expenses')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
@@ -30,6 +31,7 @@ export class ExpensesController {
   }
 
   @Post('categories')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
   @HttpCode(HttpStatus.CREATED)
   async createCategory(
     @CurrentUser('businessId') businessId: string,
@@ -48,6 +50,7 @@ export class ExpensesController {
   }
 
   @Post()
+  @Roles('OWNER', 'ADMIN', 'MANAGER', 'STAFF')
   @HttpCode(HttpStatus.CREATED)
   async createExpense(
     @CurrentUser('businessId') businessId: string,
@@ -74,6 +77,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
+  @Roles('OWNER', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   async deleteExpense(
     @CurrentUser('businessId') businessId: string,

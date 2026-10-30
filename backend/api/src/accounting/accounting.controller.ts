@@ -12,6 +12,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AccountingService } from './accounting.service';
 import { CreateAccountDto } from './dto/create-account.dto';
@@ -19,7 +20,7 @@ import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { QueryJournalDto } from './dto/query-journal.dto';
 import { QueryReportDto } from './dto/query-report.dto';
 
-@Controller('api/v1/accounting')
+@Controller('accounting')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}
@@ -30,6 +31,7 @@ export class AccountingController {
   }
 
   @Post('accounts')
+  @Roles('OWNER', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   async createAccount(
     @CurrentUser('businessId') businessId: string,
@@ -48,6 +50,7 @@ export class AccountingController {
   }
 
   @Post('journals')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
   @HttpCode(HttpStatus.CREATED)
   async createJournalEntry(
     @CurrentUser('businessId') businessId: string,
@@ -66,6 +69,7 @@ export class AccountingController {
   }
 
   @Get('reports/trial-balance')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
   async getTrialBalance(
     @CurrentUser('businessId') businessId: string,
     @Query() query: QueryReportDto,
@@ -75,6 +79,7 @@ export class AccountingController {
   }
 
   @Get('reports/profit-and-loss')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
   async getProfitAndLoss(
     @CurrentUser('businessId') businessId: string,
     @Query() query: QueryReportDto,

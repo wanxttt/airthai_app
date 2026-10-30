@@ -5,6 +5,8 @@ import '../constants/api_constants.dart';
 import '../constants/storage_keys.dart';
 import '../network/api_client.dart';
 import '../storage/secure_storage.dart';
+import '../database/database_manager.dart';
+import '../sync/sync_manager.dart';
 import 'token_manager.dart';
 
 /// User Identity Model for AirthAI Client Session.
@@ -61,6 +63,9 @@ class AuthSession {
     required this.user,
     required this.expiresAt,
   });
+
+  /// Alias for JWT access token.
+  String get accessToken => token;
 }
 
 /// Authentication Mode Indicator.
@@ -141,54 +146,60 @@ class SessionManager extends ChangeNotifier {
     );
   }
 
-  AuthMode _authMode = const String.fromEnvironment('AUTH_MODE') == 'backend'
+  // In release builds, mock authentication is strictly forbidden and permanently disabled.
+  // In debug / development builds, restBackend remains the secure default unless explicitly toggled or configured.
+  AuthMode _authMode = kReleaseMode
       ? AuthMode.restBackend
-      : AuthMode.devMock;
+      : (const String.fromEnvironment('AUTH_MODE') == 'mock'
+          ? AuthMode.devMock
+          : AuthMode.restBackend);
   AuthSession? _currentSession;
   String? _rememberMeEmail;
   bool _isRememberMeEnabled = false;
   bool _isInitialized = false;
 
   // Local development registered accounts store
-  // Password stored hashed/obfuscated in real backend, stored securely for local dev mock validation
-  final Map<String, _DevAccount> _devAccounts = {
-    'owner@airthai.in': _DevAccount(
-      user: const AuthUser(
-        id: 'usr-owner-001',
-        email: 'owner@airthai.in',
-        fullName: 'Rajesh Sharma',
-        phone: '9876543210',
-        businessId: 'biz-001',
-        role: 'OWNER',
-        isDevAccount: true,
-      ),
-      password: 'Admin@123',
-    ),
-    'accountant@airthai.in': _DevAccount(
-      user: const AuthUser(
-        id: 'usr-acct-002',
-        email: 'accountant@airthai.in',
-        fullName: 'Pooja Verma',
-        phone: '9876543211',
-        businessId: 'biz-001',
-        role: 'ACCOUNTANT',
-        isDevAccount: true,
-      ),
-      password: 'Admin@123',
-    ),
-    'cashier@airthai.in': _DevAccount(
-      user: const AuthUser(
-        id: 'usr-cash-003',
-        email: 'cashier@airthai.in',
-        fullName: 'Amit Kumar',
-        phone: '9876543212',
-        businessId: 'biz-001',
-        role: 'CASHIER',
-        isDevAccount: true,
-      ),
-      password: 'Admin@123',
-    ),
-  };
+  // In release mode, this map is strictly empty so credentials and accounts are never bundled in production.
+  final Map<String, _DevAccount> _devAccounts = kReleaseMode
+      ? <String, _DevAccount>{}
+      : {
+          'owner@airthai.in': const _DevAccount(
+            user: AuthUser(
+              id: 'usr-owner-001',
+              email: 'owner@airthai.in',
+              fullName: 'Rajesh Sharma',
+              phone: '9876543210',
+              businessId: 'biz-001',
+              role: 'OWNER',
+              isDevAccount: true,
+            ),
+            password: 'Admin@123',
+          ),
+          'accountant@airthai.in': const _DevAccount(
+            user: AuthUser(
+              id: 'usr-acct-002',
+              email: 'accountant@airthai.in',
+              fullName: 'Pooja Verma',
+              phone: '9876543211',
+              businessId: 'biz-001',
+              role: 'ACCOUNTANT',
+              isDevAccount: true,
+            ),
+            password: 'Admin@123',
+          ),
+          'cashier@airthai.in': const _DevAccount(
+            user: AuthUser(
+              id: 'usr-cash-003',
+              email: 'cashier@airthai.in',
+              fullName: 'Amit Kumar',
+              phone: '9876543212',
+              businessId: 'biz-001',
+              role: 'CASHIER',
+              isDevAccount: true,
+            ),
+            password: 'Admin@123',
+          ),
+        };
 
   AuthMode get authMode => _authMode;
   bool get isAuthenticated => _currentSession != null;
@@ -200,6 +211,9 @@ class SessionManager extends ChangeNotifier {
 
   /// Toggles between development mock mode and production REST backend mode
   void setAuthMode(AuthMode mode) {
+    if (kReleaseMode && mode == AuthMode.devMock) {
+      throw UnsupportedError('devMock mode is strictly prohibited in release builds.');
+    }
     if (_authMode != mode) {
       _authMode = mode;
       notifyListeners();
@@ -271,6 +285,9 @@ class SessionManager extends ChangeNotifier {
     if (_authMode == AuthMode.restBackend) {
       return _loginWithBackend(cleanEmail, cleanPassword, rememberMe);
     } else {
+      if (kReleaseMode) {
+        return AuthResult.failure('Mock authentication is disabled in release builds.');
+      }
       return _loginWithDevMock(cleanEmail, cleanPassword, rememberMe);
     }
   }
@@ -324,6 +341,9 @@ class SessionManager extends ChangeNotifier {
     String password,
     bool rememberMe,
   ) async {
+    if (kReleaseMode) {
+      return AuthResult.failure('Mock authentication is disabled in release builds.');
+    }
     // Artificial small delay to simulate asynchronous validation
     await Future.delayed(const Duration(milliseconds: 300));
 
@@ -435,6 +455,9 @@ class SessionManager extends ChangeNotifier {
         );
       }
     } else {
+      if (kReleaseMode) {
+        return AuthResult.failure('Mock registration is disabled in release builds.');
+      }
       // Dev mock registration
       await Future.delayed(const Duration(milliseconds: 300));
 
@@ -653,6 +676,9 @@ class SessionManager extends ChangeNotifier {
         );
       }
     } else {
+      if (kReleaseMode) {
+        return AuthResult.failure('Mock password reset is disabled in release builds.');
+      }
       await Future.delayed(const Duration(milliseconds: 300));
       if (!_devAccounts.containsKey(cleanEmail)) {
         return AuthResult.failure(
@@ -684,6 +710,12 @@ class SessionManager extends ChangeNotifier {
         // Silently handle backend network failure during logout
       }
     }
+
+    final activeBusinessId = _currentSession?.user.businessId;
+    if (activeBusinessId != null) {
+      await DatabaseManager.instance.clearTenantData(activeBusinessId);
+    }
+    await SyncManager.instance.reset();
 
     await _tokenManager.clearTokens();
     await _storage.delete(key: StorageKeys.currentUserId);

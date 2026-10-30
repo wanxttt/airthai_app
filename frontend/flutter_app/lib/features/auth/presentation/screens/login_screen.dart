@@ -4,6 +4,9 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/security/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_shell.dart';
+import 'package:airthai/features/landing/presentation/screens/landing_screen.dart';
+import 'package:airthai/features/legal/presentation/screens/privacy_policy_screen.dart';
+import 'package:airthai/features/legal/presentation/screens/terms_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -666,6 +669,56 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.primary,
                               ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Legal & Public Product Links
+                    Center(
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const LandingScreen()),
+                              );
+                            },
+                            child: const Text(
+                              'Product Features',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ),
+                          const Text('•', style: TextStyle(color: AppColors.border, fontSize: 12)),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                              );
+                            },
+                            child: const Text(
+                              'Privacy Policy',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ),
+                          const Text('•', style: TextStyle(color: AppColors.border, fontSize: 12)),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const TermsScreen()),
+                              );
+                            },
+                            child: const Text(
+                              'Terms & Conditions',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                             ),
                           ),
                         ],

@@ -2,19 +2,27 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InvoicesService } from './invoices.service';
 import { SequenceService } from './sequence.service';
 import { PrismaService } from '../database/prisma.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InvoiceStatus, Prisma, StockMovementType } from '@prisma/client';
 
 describe('InvoicesService', () => {
   let service: InvoicesService;
   let prisma: any;
   let sequenceService: any;
+  let mockSubscriptionsService: any;
 
   const mockBusinessId = 'biz_test_123';
   const mockUserId = 'usr_test_123';
 
   beforeEach(async () => {
+    mockSubscriptionsService = {
+      enforceInvoiceLimit: jest.fn().mockResolvedValue(undefined),
+      enforceUserLimit: jest.fn().mockResolvedValue(undefined),
+    };
+
     prisma = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       invoice: {
         findMany: jest.fn(),
         count: jest.fn(),
@@ -65,6 +73,7 @@ describe('InvoicesService', () => {
         InvoicesService,
         { provide: PrismaService, useValue: prisma },
         { provide: SequenceService, useValue: sequenceService },
+        { provide: SubscriptionsService, useValue: mockSubscriptionsService },
       ],
     }).compile();
 
@@ -227,6 +236,133 @@ describe('InvoicesService', () => {
       expect(result.success).toBe(true);
       expect((result as any).idempotentReplay).toBe(true);
       expect(prisma.invoice.create).not.toHaveBeenCalled();
+    });
+
+    it('SEC-AI-08: rejects invoice creation when monthly subscription invoice limit is exceeded', async () => {
+      mockSubscriptionsService.enforceInvoiceLimit.mockRejectedValueOnce(
+        new ForbiddenException('Monthly invoice quota exceeded (100/100). Please upgrade your plan.'),
+      );
+
+      await expect(
+        service.create(mockBusinessId, {
+          placeOfSupply: '27',
+          items: [{ description: 'Test', quantity: 1, unitPrice: 100, gstRate: 18 }],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(prisma.invoice.create).not.toHaveBeenCalled();
+    });
+
+    it('SEC-AI-11: locks products for update in deterministic order to prevent concurrent overselling races', async () => {
+      prisma.business.findUnique.mockResolvedValue({
+        id: mockBusinessId,
+        stateCode: '27',
+        settings: { enableGst: true, allowNegativeStock: false },
+      });
+      prisma.branch.findFirst.mockResolvedValue({ id: 'branch_1', isMain: true });
+      prisma.warehouse.findFirst.mockResolvedValue({ id: 'warehouse_1' });
+
+      prisma.product.findMany.mockResolvedValue([
+        {
+          id: 'prod_B',
+          businessId: mockBusinessId,
+          name: 'Product B',
+          trackStock: true,
+          purchasePrice: new Prisma.Decimal(100),
+          stockMovements: [{ movementType: 'PURCHASE', quantity: new Prisma.Decimal(50) }],
+        },
+        {
+          id: 'prod_A',
+          businessId: mockBusinessId,
+          name: 'Product A',
+          trackStock: true,
+          purchasePrice: new Prisma.Decimal(100),
+          stockMovements: [{ movementType: 'PURCHASE', quantity: new Prisma.Decimal(50) }],
+        },
+      ]);
+      prisma.invoice.create.mockResolvedValue({ id: 'inv_locked', invoiceNumber: 'INV-2026-27-0002', totalAmount: new Prisma.Decimal(200), balanceAmount: new Prisma.Decimal(200) });
+
+      await service.create(mockBusinessId, {
+        placeOfSupply: '27',
+        items: [
+          { productId: 'prod_B', description: 'Product B', quantity: 2, unitPrice: 100, gstRate: 18 },
+          { productId: 'prod_A', description: 'Product A', quantity: 1, unitPrice: 100, gstRate: 18 },
+        ],
+      });
+
+      expect(prisma.$executeRaw).toHaveBeenCalled();
+      expect(prisma.$executeRaw.mock.calls[0][0][0]).toContain('"products"');
+    });
+
+    it('SEC-AI-11: aggregates quantities of identical items to prevent intra-order stock bypass', async () => {
+      prisma.business.findUnique.mockResolvedValue({
+        id: mockBusinessId,
+        stateCode: '27',
+        settings: { enableGst: true, allowNegativeStock: false },
+      });
+      prisma.branch.findFirst.mockResolvedValue({ id: 'branch_1', isMain: true });
+      prisma.warehouse.findFirst.mockResolvedValue({ id: 'warehouse_1' });
+
+      // Available stock is only 5
+      prisma.product.findMany.mockResolvedValue([
+        {
+          id: 'prod_aggregate',
+          businessId: mockBusinessId,
+          name: 'Widget',
+          trackStock: true,
+          purchasePrice: new Prisma.Decimal(100),
+          stockMovements: [{ movementType: 'PURCHASE', quantity: new Prisma.Decimal(5) }],
+        },
+      ]);
+
+      // Two line items for 3 units each = 6 total (exceeds available 5)
+      await expect(
+        service.create(mockBusinessId, {
+          placeOfSupply: '27',
+          items: [
+            { productId: 'prod_aggregate', description: 'Widget Batch 1', quantity: 3, unitPrice: 100, gstRate: 18 },
+            { productId: 'prod_aggregate', description: 'Widget Batch 2', quantity: 3, unitPrice: 100, gstRate: 18 },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('SEC-AI-11: permits sale exceeding available stock when allowNegativeStock is true', async () => {
+      prisma.business.findUnique.mockResolvedValue({
+        id: mockBusinessId,
+        stateCode: '27',
+        settings: { enableGst: true, allowNegativeStock: true },
+      });
+      prisma.branch.findFirst.mockResolvedValue({ id: 'branch_1', isMain: true });
+      prisma.warehouse.findFirst.mockResolvedValue({ id: 'warehouse_1' });
+
+      // Available stock is 0
+      prisma.product.findMany.mockResolvedValue([
+        {
+          id: 'prod_neg',
+          businessId: mockBusinessId,
+          name: 'Widget Zero',
+          trackStock: true,
+          purchasePrice: new Prisma.Decimal(100),
+          stockMovements: [],
+        },
+      ]);
+      prisma.invoice.create.mockResolvedValue({ id: 'inv_neg', invoiceNumber: 'INV-2026-27-0003', totalAmount: new Prisma.Decimal(118), balanceAmount: new Prisma.Decimal(118) });
+
+      const result = await service.create(mockBusinessId, {
+        placeOfSupply: '27',
+        items: [
+          { productId: 'prod_neg', description: 'Widget Zero', quantity: 5, unitPrice: 100, gstRate: 18 },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          productId: 'prod_neg',
+          movementType: StockMovementType.SALE,
+        }),
+      });
     });
 
     it('rejects product ID that belongs to another tenant', async () => {

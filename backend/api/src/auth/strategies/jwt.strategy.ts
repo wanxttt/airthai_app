@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ConfigService } from '@nestjs/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 
 export interface JwtPayload {
@@ -19,10 +19,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
+    const secret = configService.get<string>('JWT_SECRET');
+    const isProd = configService.get<string>('NODE_ENV') === 'production';
+    if (isProd && (!secret || secret === 'replace_with_a_secure_random_64_char_secret_for_production')) {
+      throw new Error('FATAL CONFIGURATION ERROR: JWT_SECRET must be configured with a secure key in production.');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'replace_with_a_secure_random_64_char_secret_for_production',
+      secretOrKey: secret || 'replace_with_a_secure_random_64_char_secret_for_production',
     });
   }
 
@@ -68,4 +74,3 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     };
   }
 }
-

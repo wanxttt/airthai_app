@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 generator client {
@@ -104,6 +105,7 @@ model User {
 
   businessUsers   BusinessUser[]
   auditLogs       AuditLog[]
+  notifications   Notification[]
   aiConversations AiConversation[]
   aiQueryLogs     AiQueryLog[]
 
@@ -158,8 +160,10 @@ model Business {
   ledgerEntries      LedgerEntry[]
   gstRecords         GstRecord[]
   auditLogs          AuditLog[]
+  notifications      Notification[]
   syncQueues         SyncQueue[]
   subscriptions      Subscription[]
+  subscriptionOrders SubscriptionOrder[]
   aiConversations    AiConversation[]
   aiQueryLogs        AiQueryLog[]
 
@@ -611,6 +615,7 @@ model Invoice {
   @@unique([businessId, invoiceNumber])
   @@index([businessId, customerId])
   @@index([businessId, invoiceDate])
+  @@index([businessId, status])
   @@map("invoices")
 }
 
@@ -671,6 +676,9 @@ model Purchase {
 
   @@unique([businessId, id])
   @@unique([businessId, supplierId, billNumber])
+  @@index([businessId, supplierId])
+  @@index([businessId, billDate])
+  @@index([businessId, paymentStatus])
   @@map("purchases")
 }
 
@@ -722,6 +730,9 @@ model Payment {
 
   @@unique([businessId, id])
   @@unique([businessId, paymentNumber])
+  @@index([businessId, paymentDate])
+  @@index([businessId, customerId])
+  @@index([businessId, supplierId])
   @@map("payments")
 }
 
@@ -781,6 +792,8 @@ model Expense {
 
   @@unique([businessId, id])
   @@unique([businessId, expenseNumber])
+  @@index([businessId, date])
+  @@index([businessId, categoryId])
   @@map("expenses")
 }
 
@@ -816,6 +829,7 @@ model JournalEntry {
 
   @@unique([businessId, id])
   @@unique([businessId, entryNumber])
+  @@index([businessId, date])
   @@map("journal_entries")
 }
 
@@ -905,6 +919,27 @@ model SyncQueue {
   @@map("sync_queues")
 }
 
+model Notification {
+  id          String    @id @default(uuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type        String
+  title       String
+  message     String
+  data        Json?
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  dedupKey    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([businessId, isRead])
+  @@index([businessId, createdAt])
+  @@index([businessId, dedupKey])
+  @@map("notifications")
+}
+
 // ==========================================
 // LAYER 7: PLANS & FUTURE SCOPE
 // ==========================================
@@ -918,6 +953,7 @@ model Plan {
   createdAt          DateTime       @default(now())
 
   subscriptions      Subscription[]
+  subscriptionOrders SubscriptionOrder[]
 
   @@map("plans")
 }
@@ -933,6 +969,32 @@ model Subscription {
   createdAt  DateTime  @default(now())
 
   @@map("subscriptions")
+}
+
+model SubscriptionOrder {
+  id                String    @id @default(uuid())
+  businessId        String
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  planId            String
+  plan              Plan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  userId            String?
+  providerOrderId   String    @unique
+  providerPaymentId String?   @unique
+  amount            Decimal   @db.Decimal(10, 2)
+  currency          String    @default("INR")
+  status            String    @default("CREATED")
+  idempotencyKey    String?   @unique
+  signature         String?
+  receipt           String?
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([businessId])
+  @@index([providerOrderId])
+  @@index([status])
+  @@map("subscription_orders")
 }
 
 model AiConversation {

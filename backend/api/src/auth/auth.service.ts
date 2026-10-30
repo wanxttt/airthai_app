@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -12,6 +13,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { TokenRevocationService } from './services/token-revocation.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -44,16 +46,38 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly tokenRevocationService: TokenRevocationService,
+    @Optional() private readonly subscriptionsService?: SubscriptionsService,
   ) {}
 
   private getJwtSecret(): string {
-    return (
-      this.configService.get<string>('JWT_SECRET') ||
-      'replace_with_a_secure_random_64_char_secret_for_production'
-    );
+    const secret = this.configService.get<string>('JWT_SECRET');
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+    if (isProd && (!secret || secret === 'replace_with_a_secure_random_64_char_secret_for_production')) {
+      throw new Error('FATAL CONFIGURATION ERROR: JWT_SECRET must be configured with a secure key in production.');
+    }
+    return secret || 'replace_with_a_secure_random_64_char_secret_for_production';
   }
 
   private getRefreshTokenSecret(): string {
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+
+    if (refreshSecret && refreshSecret.trim().length > 0) {
+      if (
+        isProd &&
+        (refreshSecret === 'replace_with_a_secure_random_64_char_secret_for_production' || refreshSecret.length < 32)
+      ) {
+        throw new Error(
+          'FATAL CONFIGURATION ERROR: JWT_REFRESH_SECRET must be configured with at least 32 characters in production.',
+        );
+      }
+      return refreshSecret.trim();
+    }
+
+    if (isProd) {
+      throw new Error('FATAL CONFIGURATION ERROR: JWT_REFRESH_SECRET must be configured in production.');
+    }
+
     return `${this.getJwtSecret()}_refresh`;
   }
 
@@ -178,7 +202,7 @@ export class AuthService {
       };
     });
 
-    const tokens = this.generateTokenPair(
+    const tokens = await this.generateTokenPair(
       result.user.id,
       result.user.email,
       result.business.id,
@@ -196,6 +220,25 @@ export class AuthService {
         role: result.role,
       },
     };
+  }
+
+  /**
+   * Adds an existing user to an existing business tenant with the assigned role,
+   * enforcing subscription user seat limits (SEC-AI-08).
+   */
+  async addUserToBusiness(businessId: string, userId: string, roleId: string, branchId?: string) {
+    if (this.subscriptionsService) {
+      await this.subscriptionsService.enforceUserLimit(businessId);
+    }
+    return this.prisma.businessUser.create({
+      data: {
+        businessId,
+        userId,
+        roleId,
+        defaultBranchId: branchId,
+        isActive: true,
+      },
+    });
   }
 
   /**
@@ -234,7 +277,7 @@ export class AuthService {
     const businessId = primaryMembership?.businessId || null;
     const role = primaryMembership?.role?.name || 'OWNER';
 
-    const tokens = this.generateTokenPair(user.id, user.email, businessId ?? undefined, role);
+    const tokens = await this.generateTokenPair(user.id, user.email, businessId ?? undefined, role);
 
     return {
       ...tokens,
@@ -284,7 +327,7 @@ export class AuthService {
     const newJti = crypto.randomUUID();
     const ttlMs = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-    const success = this.tokenRevocationService.rotateRefreshToken(
+    const success = await this.tokenRevocationService.rotateRefreshToken(
       jti,
       newJti,
       family,
@@ -321,14 +364,14 @@ export class AuthService {
       try {
         const payload = this.jwtService.decode(refreshToken) as any;
         if (payload?.family) {
-          this.tokenRevocationService.revokeFamily(payload.family);
+          await this.tokenRevocationService.revokeFamily(payload.family);
         }
       } catch {
         // Continue with user-level revocation
       }
     }
 
-    this.tokenRevocationService.revokeAllForUser(user.id);
+    await this.tokenRevocationService.revokeAllForUser(user.id);
     return {
       success: true,
       message: 'Logged out successfully.',
@@ -464,17 +507,17 @@ export class AuthService {
     });
   }
 
-  private generateTokenPair(
+  private async generateTokenPair(
     userId: string,
     email: string,
     businessId?: string,
     role: string = 'OWNER',
-  ): AuthTokens {
+  ): Promise<AuthTokens> {
     const family = crypto.randomUUID();
     const jti = crypto.randomUUID();
     const ttlMs = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-    this.tokenRevocationService.registerRefreshToken(jti, family, userId, ttlMs);
+    await this.tokenRevocationService.registerRefreshToken(jti, family, userId, ttlMs);
     return this.generateTokenPairWithFamily(userId, email, businessId, role, family, jti, ttlMs);
   }
 

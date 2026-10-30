@@ -63,10 +63,18 @@ class AirthAIApp extends StatelessWidget {
 
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
+            minimumSize: const Size(64, 48),
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(64, 48),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),

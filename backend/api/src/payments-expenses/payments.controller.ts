@@ -12,17 +12,19 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, VoidPaymentDto } from './dto/create-payment.dto';
 import { QueryPaymentsDto } from './dto/query-payments.dto';
 
-@Controller('api/v1/payments')
+@Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('receipts')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
   @HttpCode(HttpStatus.CREATED)
   async recordCustomerReceipt(
     @CurrentUser('businessId') businessId: string,
@@ -33,6 +35,7 @@ export class PaymentsController {
   }
 
   @Post('supplier-payments')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
   @HttpCode(HttpStatus.CREATED)
   async recordSupplierPayment(
     @CurrentUser('businessId') businessId: string,
@@ -75,6 +78,7 @@ export class PaymentsController {
   }
 
   @Post(':id/void')
+  @Roles('OWNER', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   async voidPayment(
     @CurrentUser('businessId') businessId: string,

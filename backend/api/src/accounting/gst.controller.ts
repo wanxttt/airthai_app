@@ -11,7 +11,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GstService } from './gst.service';
 import { QueryGstDto } from './dto/query-report.dto';
 
-@Controller('api/v1/gst')
+@Controller('gst')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class GstController {
   constructor(private readonly gstService: GstService) {}

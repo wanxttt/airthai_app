@@ -1,9 +1,12 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/security/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/app_shell.dart';
+import 'package:airthai/features/legal/presentation/screens/privacy_policy_screen.dart';
+import 'package:airthai/features/legal/presentation/screens/terms_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -28,8 +31,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TermsScreen()),
+        );
+      };
+    _privacyRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+        );
+      };
+  }
+
   @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     _nameController.dispose();
     _businessNameController.dispose();
     _emailController.dispose();
@@ -537,13 +564,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Padding(
                             padding: EdgeInsets.only(top: 2),
                             child: Text.rich(
                               TextSpan(
                                 text: 'I agree to the ',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 12,
                                   height: 1.4,
                                   color: AppColors.textSecondary,
@@ -551,19 +578,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 children: [
                                   TextSpan(
                                     text: 'Terms & Conditions',
-                                    style: TextStyle(
+                                    recognizer: _termsRecognizer,
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.primary,
+                                      decoration: TextDecoration.underline,
                                     ),
                                   ),
-                                  TextSpan(
+                                  const TextSpan(
                                     text: ' and ',
                                   ),
                                   TextSpan(
                                     text: 'Privacy Policy',
-                                    style: TextStyle(
+                                    recognizer: _privacyRecognizer,
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.primary,
+                                      decoration: TextDecoration.underline,
                                     ),
                                   ),
                                 ],

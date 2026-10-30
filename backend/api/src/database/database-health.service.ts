@@ -17,8 +17,8 @@ export class DatabaseHealthService {
   async checkHealth(): Promise<DatabaseHealthResult> {
     const start = Date.now();
     try {
-      // Execute a lightweight query to verify connectivity
-      await this.prisma.$queryRawUnsafe('SELECT 1');
+      // Execute a lightweight parameterized query to verify connectivity safely
+      await this.prisma.$queryRaw`SELECT 1`;
       const latencyMs = Date.now() - start;
 
       return {

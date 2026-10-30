@@ -1,16 +1,57 @@
-# airthai
+# AirthAI — MSME Business Operating System (Monorepo)
 
-A new Flutter project.
+AirthAI is an offline-first Enterprise Resource Planning (ERP) and business intelligence operating system tailored for Micro, Small, and Medium Enterprises (MSMEs).
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## Authoritative Repository Directory Structure
 
-A few resources to get you started if this is your first Flutter project:
+This repository is structured as a modular monorepo containing distinct, isolated subsystems:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```
+Airthai_app_b/airthai_app/
+├── backend/
+│   └── api/                # [AUTHORITATIVE] NestJS 10 Modular Monolith API
+│       ├── prisma/         # Prisma 6 PostgreSQL schema, migrations & seeders
+│       ├── src/            # Auth, Sales, Purchases, Accounting, Copilot, Subscriptions
+│       └── test/           # Jest unit, integration & E2E test suites
+│
+├── frontend/
+│   └── flutter_app/        # [AUTHORITATIVE] Production Flutter Multiplatform Application
+│       ├── lib/            # Material 3 UI, core services, SQLite sync engine, routing
+│       ├── test/           # 17 automated Flutter unit & widget test suites (130 tests)
+│       └── web/            # Production web assets, manifest & index.html
+│
+├── infrastructure/         # Docker, PgBouncer, Nginx & deployment manifests
+├── docs/                   # Complete architectural, database, security & audit documentation
+└── .github/                # GitHub Actions CI/CD workflows (ci.yml)
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+> **IMPORTANT NOTICE FOR DEVELOPERS & CI WORKFLOWS:**  
+> The active production Flutter codebase is located inside **`frontend/flutter_app`**.  
+> Always navigate to `frontend/flutter_app` when running Flutter commands (`flutter test`, `flutter analyze`, `flutter build`).  
+> The legacy boilerplate files at the repository root are preserved solely for directory structure stability.
+
+---
+
+## Quick Start & Verification
+
+### 1. Backend API (NestJS)
+```powershell
+cd backend/api
+npm install
+npm run prisma:validate
+npm run prisma:generate
+npm test -- --runInBand
+npm run build
+```
+
+### 2. Frontend Application (Flutter)
+```powershell
+cd frontend/flutter_app
+flutter pub get
+flutter analyze lib
+flutter analyze test
+flutter test
+flutter build web --release
+```

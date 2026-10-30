@@ -20,6 +20,7 @@ void main() {
         storage: storage,
         tokenManager: tokenManager,
       );
+      sessionManager.setAuthMode(AuthMode.devMock);
     });
 
     test('isProtectedRoute correctly classifies protected vs public routes', () {
@@ -28,10 +29,21 @@ void main() {
       expect(RouteGuards.isProtectedRoute('/inventory'), true);
       expect(RouteGuards.isProtectedRoute('/customers'), true);
       expect(RouteGuards.isProtectedRoute('/suppliers'), true);
+      expect(RouteGuards.isProtectedRoute('/purchases'), true);
+      expect(RouteGuards.isProtectedRoute('/expenses'), true);
       expect(RouteGuards.isProtectedRoute('/reports'), true);
+      expect(RouteGuards.isProtectedRoute('/accounting'), true);
+      expect(RouteGuards.isProtectedRoute('/payments'), true);
+      expect(RouteGuards.isProtectedRoute('/copilot'), true);
+      expect(RouteGuards.isProtectedRoute('/audit'), true);
+      expect(RouteGuards.isProtectedRoute('/notifications'), true);
+      expect(RouteGuards.isProtectedRoute('/subscriptions'), true);
       expect(RouteGuards.isProtectedRoute('/login'), false);
       expect(RouteGuards.isProtectedRoute('/register'), false);
       expect(RouteGuards.isProtectedRoute('/'), false);
+      expect(RouteGuards.isProtectedRoute('/home'), false);
+      expect(RouteGuards.isProtectedRoute('/privacy'), false);
+      expect(RouteGuards.isProtectedRoute('/terms'), false);
     });
 
     testWidgets('requireAuth redirects unauthenticated session to LoginScreen', (tester) async {

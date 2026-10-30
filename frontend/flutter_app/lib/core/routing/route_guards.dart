@@ -32,6 +32,12 @@ class RouteGuards {
         routeName.startsWith('/purchases') ||
         routeName.startsWith('/expenses') ||
         routeName.startsWith('/reports') ||
+        routeName.startsWith('/accounting') ||
+        routeName.startsWith('/payments') ||
+        routeName.startsWith('/copilot') ||
+        routeName.startsWith('/audit') ||
+        routeName.startsWith('/notifications') ||
+        routeName.startsWith('/subscriptions') ||
         routeName.startsWith('/settings');
   }
 }

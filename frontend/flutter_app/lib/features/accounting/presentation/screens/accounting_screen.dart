@@ -931,7 +931,7 @@ class _AccountingScreenState extends State<AccountingScreen>
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<AccountType>(
-                value: selectedType,
+                initialValue: selectedType,
                 decoration: const InputDecoration(labelText: 'Account Classification'),
                 items: AccountType.values
                     .map((t) => DropdownMenuItem(value: t, child: Text(t.label)))
@@ -1059,7 +1059,7 @@ class _AccountingScreenState extends State<AccountingScreen>
                             Expanded(
                               flex: 3,
                               child: DropdownButtonFormField<String>(
-                                value: item['accountId'],
+                                initialValue: item['accountId'],
                                 isExpanded: true,
                                 items: _accounts
                                     .map((a) => DropdownMenuItem(

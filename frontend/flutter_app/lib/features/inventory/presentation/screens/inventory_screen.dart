@@ -1124,6 +1124,9 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _buildValuationSummary() {
+    if (_isLoadingSummary && _summary == null) {
+      return const SizedBox.shrink();
+    }
     final s = _summary;
     final totalValuation = s?.totalValuation ?? 0.0;
     final totalStockQty = s?.totalStockQuantity ?? 0.0;

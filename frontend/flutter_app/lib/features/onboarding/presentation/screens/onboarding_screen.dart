@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
 
+import '../../../../core/theme/app_dimensions.dart';
+import 'package:airthai/features/landing/presentation/screens/landing_screen.dart';
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -89,6 +92,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LandingScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.explore_outlined, size: 16),
+                    label: const Text(
+                      'Explore Features',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                     ),
                   ),
                   const Spacer(),
@@ -221,7 +238,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             height: size.width > 600 ? 280 : 230,
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(40),
+              borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
               border: Border.all(
                 color: AppColors.border,
               ),

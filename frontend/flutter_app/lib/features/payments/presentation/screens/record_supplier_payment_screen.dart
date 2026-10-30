@@ -261,7 +261,7 @@ class _RecordSupplierPaymentScreenState extends State<RecordSupplierPaymentScree
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
                               isExpanded: true,
-                              value: _selectedSupplierId,
+                              initialValue: _selectedSupplierId,
                               decoration: const InputDecoration(
                                 labelText: 'Select Supplier *',
                                 prefixIcon: Icon(Icons.local_shipping_rounded),
@@ -326,7 +326,7 @@ class _RecordSupplierPaymentScreenState extends State<RecordSupplierPaymentScree
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
                                     isExpanded: true,
-                                    value: _paymentMethod,
+                                    initialValue: _paymentMethod,
                                     decoration: const InputDecoration(
                                       labelText: 'Payment Method *',
                                       prefixIcon: Icon(Icons.payment_rounded),

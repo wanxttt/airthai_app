@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../sales/sequence.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PaymentType, PaymentMethod, Prisma } from '@prisma/client';
 
 describe('PaymentsService', () => {
@@ -25,6 +25,7 @@ describe('PaymentsService', () => {
     };
 
     mockPrisma = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $transaction: jest.fn().mockImplementation(async (callback) => {
         return callback(mockPrisma);
       }),
@@ -37,11 +38,13 @@ describe('PaymentsService', () => {
         update: jest.fn(),
       },
       invoice: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn(),
         update: jest.fn(),
         findMany: jest.fn(),
       },
       purchase: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn(),
         update: jest.fn(),
         findMany: jest.fn(),
@@ -140,6 +143,8 @@ describe('PaymentsService', () => {
         },
       });
 
+      expect(mockPrisma.$executeRaw).toHaveBeenCalled();
+      expect(mockPrisma.$executeRaw.mock.calls[0][0][0]).toContain('"invoices"');
       // Verify customer current balance decremented by payment amount
       expect(mockPrisma.customer.update).toHaveBeenCalledWith({
         where: { businessId_id: { businessId: mockBusinessId, id: mockCustomerId } },
@@ -223,6 +228,42 @@ describe('PaymentsService', () => {
           mockUserId,
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('SEC-AI-10: rejects concurrent customer receipt allocation when invoice balance changed concurrently', async () => {
+      mockPrisma.customer.findUnique.mockResolvedValue({
+        id: mockCustomerId,
+        businessId: mockBusinessId,
+        status: 'ACTIVE',
+      });
+
+      mockPrisma.invoice.findUnique.mockResolvedValue({
+        id: 'inv_001',
+        businessId: mockBusinessId,
+        customerId: mockCustomerId,
+        invoiceNumber: 'INV-001',
+        receivedAmount: new Prisma.Decimal(0),
+        balanceAmount: new Prisma.Decimal(5000),
+        status: 'ISSUED',
+      });
+
+      // Simulate concurrent transaction winning race by having updateMany match 0 records
+      mockPrisma.payment.create.mockResolvedValue({ id: 'pay_concurrent_123', amount: new Prisma.Decimal(5000) });
+      mockPrisma.invoice.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.recordCustomerReceipt(
+          mockBusinessId,
+          {
+            paymentType: PaymentType.CUSTOMER_RECEIPT,
+            customerId: mockCustomerId,
+            amount: 5000,
+            paymentMethod: PaymentMethod.BANK_TRANSFER,
+            allocations: [{ invoiceId: 'inv_001', amount: 5000 }],
+          },
+          mockUserId,
+        ),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('rejects allocation when invoice belongs to a different customer', async () => {
@@ -334,6 +375,8 @@ describe('PaymentsService', () => {
         },
       });
 
+      expect(mockPrisma.$executeRaw).toHaveBeenCalled();
+      expect(mockPrisma.$executeRaw.mock.calls[0][0][0]).toContain('"purchases"');
       // Verify supplier payable balance decremented
       expect(mockPrisma.supplier.update).toHaveBeenCalledWith({
         where: { businessId_id: { businessId: mockBusinessId, id: mockSupplierId } },
@@ -376,6 +419,42 @@ describe('PaymentsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+    it('SEC-AI-10: rejects concurrent supplier payment allocation when purchase bill balance changed concurrently', async () => {
+      mockPrisma.supplier.findUnique.mockResolvedValue({
+        id: mockSupplierId,
+        businessId: mockBusinessId,
+        status: 'ACTIVE',
+      });
+
+      mockPrisma.purchase.findUnique.mockResolvedValue({
+        id: 'pur_001',
+        businessId: mockBusinessId,
+        supplierId: mockSupplierId,
+        billNumber: 'BILL-001',
+        paidAmount: new Prisma.Decimal(0),
+        balanceAmount: new Prisma.Decimal(12000),
+        status: 'RECEIVED',
+      });
+
+      // Simulate concurrent transaction updating the purchase bill
+      mockPrisma.payment.create.mockResolvedValue({ id: 'pay_concurrent_pur', amount: new Prisma.Decimal(12000) });
+      mockPrisma.purchase.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.recordSupplierPayment(
+          mockBusinessId,
+          {
+            paymentType: PaymentType.SUPPLIER_PAYMENT,
+            supplierId: mockSupplierId,
+            amount: 12000,
+            paymentMethod: PaymentMethod.BANK_TRANSFER,
+            allocations: [{ purchaseId: 'pur_001', amount: 12000 }],
+          },
+          mockUserId,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
 
   describe('voidPayment', () => {
     it('successfully voids customer receipt, restores invoice balances and customer balance', async () => {

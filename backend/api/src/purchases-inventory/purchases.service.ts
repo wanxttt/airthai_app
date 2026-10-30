@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
+import { CacheService } from '../common/cache/cache.service';
 import { PrismaService } from '../database/prisma.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { QueryPurchasesDto } from './dto/query-purchases.dto';
@@ -17,6 +18,7 @@ export class PurchasesService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly accountingService?: AccountingService,
+    @Optional() private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -156,7 +158,7 @@ export class PurchasesService {
       }
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 2. Validate Supplier
       const supplier = await tx.supplier.findUnique({
         where: { businessId_id: { businessId, id: dto.supplierId } },
@@ -294,6 +296,12 @@ export class PurchasesService {
         data: purchase,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   /**
@@ -317,7 +325,7 @@ export class PurchasesService {
       throw new BadRequestException('Cannot receive a cancelled purchase.');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const warehouse = await tx.warehouse.findFirst({
         where: { businessId, branchId: existing.branchId },
       }) || (await tx.warehouse.findFirst({ where: { businessId } }));
@@ -348,6 +356,12 @@ export class PurchasesService {
         data: updatedPurchase,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   /**
@@ -367,7 +381,7 @@ export class PurchasesService {
       throw new BadRequestException('Purchase is already cancelled.');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Mark status as CANCELLED
       const cancelled = await tx.purchase.update({
         where: { businessId_id: { businessId, id } },
@@ -460,6 +474,12 @@ export class PurchasesService {
         data: cancelled,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   private async _applyReceiveEffects(

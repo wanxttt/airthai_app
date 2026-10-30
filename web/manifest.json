@@ -1,12 +1,12 @@
 {
-    "name": "airthai",
-    "short_name": "airthai",
+    "name": "AirthAI — GST Billing, Inventory & Accounting",
+    "short_name": "AirthAI",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F6F9FD",
+    "theme_color": "#1565D8",
+    "description": "GST-compliant billing, real-time inventory management, automated GSTR-1 & GSTR-3B tax preparation summaries, and read-only AI Business Copilot.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

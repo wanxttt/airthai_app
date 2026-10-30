@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../core/services/sales_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -26,6 +27,7 @@ class _SalesScreenState extends State<SalesScreen> with SingleTickerProviderStat
   bool _isLoadingQuotations = true;
   String? _quotationsError;
   String _quotationSearch = '';
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -37,8 +39,29 @@ class _SalesScreenState extends State<SalesScreen> with SingleTickerProviderStat
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onInvoiceSearchChanged(String val) {
+    setState(() => _invoiceSearch = val);
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _loadInvoices();
+      }
+    });
+  }
+
+  void _onQuotationSearchChanged(String val) {
+    setState(() => _quotationSearch = val);
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _loadQuotations();
+      }
+    });
   }
 
   Future<void> _loadInvoices() async {
@@ -306,8 +329,10 @@ class _SalesScreenState extends State<SalesScreen> with SingleTickerProviderStat
                           )
                         : null,
                   ),
-                  onChanged: (val) {
-                    setState(() => _invoiceSearch = val);
+                  onChanged: _onInvoiceSearchChanged,
+
+                  onSubmitted: (val) {
+                    _onInvoiceSearchChanged(val);
                     _loadInvoices();
                   },
                 ),
@@ -524,8 +549,10 @@ class _SalesScreenState extends State<SalesScreen> with SingleTickerProviderStat
                           )
                         : null,
                   ),
-                  onChanged: (val) {
-                    setState(() => _quotationSearch = val);
+                  onChanged: _onInvoiceSearchChanged,
+
+                  onSubmitted: (val) {
+                    _onQuotationSearchChanged(val);
                     _loadQuotations();
                   },
                 ),

@@ -1,3 +1,10 @@
+// ==============================================================================
+// AIRTHAI MONOREPO NOTICE:
+// The production Flutter application resides in: frontend/flutter_app
+// Please open frontend/flutter_app as your active Flutter project.
+// All production code, screens, services, and tests are located there.
+// ==============================================================================
+
 import 'package:flutter/material.dart';
 
 void main() {

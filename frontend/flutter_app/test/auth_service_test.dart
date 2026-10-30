@@ -22,12 +22,12 @@ void main() {
       );
     });
 
-    test('Initial state is unauthenticated and initialized', () async {
+    test('Initial state is unauthenticated and initialized with secure default', () async {
       await sessionManager.initialize();
       expect(sessionManager.isAuthenticated, false);
       expect(sessionManager.currentUser, isNull);
       expect(sessionManager.currentSession, isNull);
-      expect(sessionManager.authMode, AuthMode.devMock);
+      expect(sessionManager.authMode, AuthMode.restBackend);
     });
 
     test('Login with empty or invalid email fails with validation error', () async {
@@ -47,6 +47,7 @@ void main() {
     });
 
     test('Login with unregistered email in dev mode returns clear error', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       final res = await sessionManager.login(
         email: 'unknown@example.com',
         password: 'Password123',
@@ -57,6 +58,7 @@ void main() {
     });
 
     test('Login with incorrect password in dev mode is rejected', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       final res = await sessionManager.login(
         email: 'owner@airthai.in',
         password: 'WrongPassword!',
@@ -67,6 +69,7 @@ void main() {
     });
 
     test('Login with valid dev credentials succeeds and creates session', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       final res = await sessionManager.login(
         email: 'owner@airthai.in',
         password: 'Admin@123',
@@ -90,6 +93,7 @@ void main() {
     });
 
     test('Registration creates user account and signs in', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       final res = await sessionManager.register(
         name: 'Vikram Malhotra',
         email: 'vikram@malhotratech.com',
@@ -116,6 +120,7 @@ void main() {
     });
 
     test('Registration with existing email is rejected', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       final res = await sessionManager.register(
         name: 'Duplicate Owner',
         email: 'owner@airthai.in',
@@ -128,6 +133,7 @@ void main() {
     });
 
     test('Password reset succeeds for registered email, fails for unknown email', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       final res1 = await sessionManager.resetPassword(email: 'owner@airthai.in');
       expect(res1.success, true);
 
@@ -137,6 +143,7 @@ void main() {
     });
 
     test('Logout clears session and tokens while preserving Remember Me preference', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       await sessionManager.login(
         email: 'owner@airthai.in',
         password: 'Admin@123',
@@ -194,6 +201,7 @@ void main() {
     });
 
     test('updateBusinessSetup updates business details successfully', () async {
+      sessionManager.setAuthMode(AuthMode.devMock);
       await sessionManager.login(
         email: 'owner@airthai.in',
         password: 'Admin@123',
@@ -208,6 +216,32 @@ void main() {
       );
 
       expect(res.success, true);
+    });
+
+    test('SEC-AI-01: Default authentication mode is restBackend, preventing silent mock bypass', () async {
+      final freshManager = SessionManager(
+        storage: storage,
+        tokenManager: tokenManager,
+      );
+      expect(freshManager.authMode, AuthMode.restBackend);
+    });
+
+    test('SEC-AI-02: Missing or invalid backend authentication never creates an authenticated session', () async {
+      final freshManager = SessionManager(
+        storage: storage,
+        tokenManager: tokenManager,
+        apiClient: ApiClient(baseUrl: 'http://127.0.0.1:9999'),
+      );
+      expect(freshManager.authMode, AuthMode.restBackend);
+
+      final res = await freshManager.login(
+        email: 'attacker@airthai.in',
+        password: 'Password123',
+      );
+      expect(res.success, false);
+      expect(freshManager.isAuthenticated, false);
+      expect(freshManager.currentUser, isNull);
+      expect(freshManager.currentSession, isNull);
     });
   });
 }

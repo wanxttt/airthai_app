@@ -1,0 +1,2 @@
+"postgres" "postgrespassword"
+"airthai_user" "postgrespassword"

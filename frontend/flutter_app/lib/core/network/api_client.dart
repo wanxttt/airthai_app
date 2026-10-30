@@ -79,6 +79,9 @@ class ApiClient {
   }) async {
     final client = HttpClient();
     client.connectionTimeout = timeout;
+    final outgoingReqId = headers?['X-Request-Id'] ??
+        headers?['x-request-id'] ??
+        'flutter_${DateTime.now().millisecondsSinceEpoch}';
 
     try {
       final uri = Uri.parse('$baseUrl$path');
@@ -102,6 +105,9 @@ class ApiClient {
         );
       }
 
+      // Request ID correlation header
+      request.headers.set('X-Request-Id', outgoingReqId);
+
       // Custom headers
       if (headers != null) {
         headers.forEach((key, value) {
@@ -118,6 +124,8 @@ class ApiClient {
       final response = await request.close().timeout(timeout);
       final responseBody = await utf8.decodeStream(response).timeout(timeout);
 
+      final incomingReqId = response.headers.value('x-request-id');
+
       Map<String, dynamic>? parsedData;
       if (responseBody.isNotEmpty) {
         try {
@@ -130,6 +138,8 @@ class ApiClient {
         }
       }
 
+      final resolvedReqId = incomingReqId ?? parsedData?['requestId']?.toString() ?? outgoingReqId;
+
       final isOk = response.statusCode >= 200 && response.statusCode < 300;
       final message = parsedData?['message']?.toString() ??
           (isOk ? 'Success' : 'Request failed with status ${response.statusCode}');
@@ -139,22 +149,26 @@ class ApiClient {
         isSuccess: isOk,
         data: parsedData,
         message: message,
+        requestId: resolvedReqId,
       );
     } on SocketException catch (_) {
       return ApiResponse.error(
         statusCode: 503,
         message:
             'Cannot connect to backend server at $baseUrl. Ensure the NestJS server is running.',
+        requestId: outgoingReqId,
       );
     } on TimeoutException catch (_) {
       return ApiResponse.error(
         statusCode: 408,
         message: 'Connection timed out while contacting backend server.',
+        requestId: outgoingReqId,
       );
     } catch (e) {
       return ApiResponse.error(
         statusCode: 500,
         message: 'Network error: ${e.toString()}',
+        requestId: outgoingReqId,
       );
     } finally {
       client.close(force: true);

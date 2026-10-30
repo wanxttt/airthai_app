@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
+import { CacheService } from '../common/cache/cache.service';
 import { PrismaService } from '../database/prisma.service';
 import { SequenceService } from '../sales/sequence.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -34,6 +35,7 @@ export class ExpensesService {
     private readonly prisma: PrismaService,
     private readonly sequenceService: SequenceService,
     @Optional() private readonly accountingService?: AccountingService,
+    @Optional() private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -100,7 +102,7 @@ export class ExpensesService {
       throw new BadRequestException('GST amount cannot exceed total expense amount.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Validate Category
       const category = await tx.expenseCategory.findUnique({
         where: { businessId_id: { businessId, id: dto.categoryId } },
@@ -166,6 +168,12 @@ export class ExpensesService {
 
       return expense;
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 
   /**
@@ -320,7 +328,7 @@ export class ExpensesService {
    * Delete an expense with audit logging to preserve financial trail.
    */
   async deleteExpense(businessId: string, id: string, userId?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const expense = await tx.expense.findUnique({
         where: { businessId_id: { businessId, id } },
       });
@@ -358,6 +366,12 @@ export class ExpensesService {
         message: `Expense ${expense.expenseNumber} deleted.`,
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.delByPrefix(`dashboard:${businessId}`);
+    }
+
+    return result;
   }
 }
 
